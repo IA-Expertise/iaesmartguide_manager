@@ -1,6 +1,8 @@
 import { prisma } from "@iaesmartguide/db";
 import type { TempData } from "../fsm/states.js";
 import { ChatStates } from "../fsm/states.js";
+import { persistWhatsAppImage, resolveMediaUrl, resolveMediaUrls } from "../services/media.js";
+import { revalidateTenant } from "../services/revalidate.js";
 import { slugify } from "../utils/slugify.js";
 
 interface IncomingMessage {
@@ -85,20 +87,25 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<s
     }
 
     case ChatStates.COLLECTING_LOGO: {
-      if (message.type !== "image") {
+      if (message.type !== "image" || !message.imageId) {
         replies.push("Envie uma imagem para o logotipo.");
         break;
       }
-      // Media download + R2 upload será implementado na Fase 3
-      const logoUrl = message.imageId ? `pending://${message.imageId}` : undefined;
-      await prisma.chatState.update({
-        where: { whatsappNumber: phone },
-        data: {
-          currentState: ChatStates.COLLECTING_PHOTOS,
-          tempData: { ...tempData, logoUrl, photos: [] },
-        },
-      });
-      replies.push("Logo recebido! Envie até 5 fotos do local. Quando terminar, toque em ➡️ Avançar.");
+      const slug = tempData.slug!;
+      try {
+        const logoUrl = await persistWhatsAppImage(message.imageId, slug, "logo");
+        await prisma.chatState.update({
+          where: { whatsappNumber: phone },
+          data: {
+            currentState: ChatStates.COLLECTING_PHOTOS,
+            tempData: { ...tempData, logoUrl, photos: [] },
+          },
+        });
+        replies.push("Logo recebido! Envie até 5 fotos do local. Quando terminar, toque em ➡️ Avançar.");
+      } catch (error) {
+        console.error("[FSM logo upload]", error);
+        replies.push("Não consegui salvar o logo. Tente enviar a imagem novamente.");
+      }
       break;
     }
 
@@ -112,14 +119,20 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<s
         break;
       }
       if (message.type === "image" && message.imageId) {
-        const photos = [...(tempData.photos ?? []), `pending://${message.imageId}`].slice(0, 5);
-        await prisma.chatState.update({
-          where: { whatsappNumber: phone },
-          data: { tempData: { ...tempData, photos } },
-        });
-        replies.push(
-          `Foto ${photos.length}/5 recebida. Envie mais ou toque em ➡️ Avançar para Próxima Etapa.`
-        );
+        try {
+          const photoUrl = await persistWhatsAppImage(message.imageId, tempData.slug!, "photo");
+          const photos = [...(tempData.photos ?? []), photoUrl].slice(0, 5);
+          await prisma.chatState.update({
+            where: { whatsappNumber: phone },
+            data: { tempData: { ...tempData, photos } },
+          });
+          replies.push(
+            `Foto ${photos.length}/5 recebida. Envie mais ou toque em ➡️ Avançar para Próxima Etapa.`
+          );
+        } catch (error) {
+          console.error("[FSM photo upload]", error);
+          replies.push("Não consegui salvar a foto. Tente enviar novamente.");
+        }
         break;
       }
       replies.push("Envie fotos ou toque no botão para avançar.");
@@ -139,6 +152,14 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<s
       const slug = tempData.slug!;
       const businessName = tempData.businessName!;
 
+      let logoUrl = tempData.logoUrl;
+      if (logoUrl) {
+        logoUrl = await resolveMediaUrl(logoUrl, slug, "logo");
+      }
+      const photos = tempData.photos?.length
+        ? await resolveMediaUrls(tempData.photos, slug)
+        : [];
+
       const saved = await prisma.tenant.upsert({
         where: { whatsappNumber: phone },
         create: {
@@ -146,7 +167,7 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<s
           ownerName: businessName,
           businessName,
           slug,
-          logoUrl: tempData.logoUrl,
+          logoUrl,
           youtubeUrl: tempData.youtubeUrl ?? undefined,
           paymentStatus: "paid",
           isPublished: false,
@@ -154,17 +175,19 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<s
         update: {
           businessName,
           slug,
-          logoUrl: tempData.logoUrl,
+          logoUrl,
           youtubeUrl: tempData.youtubeUrl ?? undefined,
         },
       });
 
-      if (tempData.photos?.length) {
+      if (photos.length) {
         await prisma.tenantPhoto.deleteMany({ where: { tenantId: saved.id } });
         await prisma.tenantPhoto.createMany({
-          data: tempData.photos.map((photoUrl) => ({ tenantId: saved.id, photoUrl })),
+          data: photos.map((photoUrl) => ({ tenantId: saved.id, photoUrl })),
         });
       }
+
+      await revalidateTenant(slug);
 
       await prisma.chatState.update({
         where: { whatsappNumber: phone },
