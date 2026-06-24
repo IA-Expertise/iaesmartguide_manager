@@ -14,6 +14,16 @@
   font-size: 0.9rem;
 }
 
+.exampleLink {
+  color: #2d6a4f;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.exampleLink:hover {
+  text-decoration: underline;
+}
+
 .hint code {
   background: #e4e4e7;
   padding: 0.15rem 0.4rem;
