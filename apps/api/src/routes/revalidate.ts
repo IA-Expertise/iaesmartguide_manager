@@ -17,7 +17,7 @@ revalidateRouter.post("/", async (req, res) => {
   }
 
   const webUrl = process.env.WEB_URL ?? "http://localhost:3000";
-  const path = `/_sites/${slug}`;
+  const path = `/sites/${slug}`;
 
   try {
     const response = await fetch(`${webUrl}/api/revalidate`, {

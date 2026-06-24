@@ -23,7 +23,7 @@ export function middleware(req: NextRequest) {
   // Preview via ?site=slug no domínio principal (local, vercel.app ou iaesmartguide.com.br)
   const siteParam = url.searchParams.get("site");
   if (siteParam && isMainDomain(hostname)) {
-    return NextResponse.rewrite(new URL(`/_sites/${siteParam}${url.pathname}`, req.url));
+    return NextResponse.rewrite(new URL(`/sites/${siteParam}${url.pathname}`, req.url));
   }
 
   let subdomain: string | null = null;
@@ -39,7 +39,7 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  return NextResponse.rewrite(new URL(`/_sites/${subdomain}${url.pathname}`, req.url));
+  return NextResponse.rewrite(new URL(`/sites/${subdomain}${url.pathname}`, req.url));
 }
 
 export const config = {
