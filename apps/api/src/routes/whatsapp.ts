@@ -1,9 +1,27 @@
+import type { Request } from "express";
 import { Router } from "express";
 import { config } from "../config.js";
 import { handleWhatsAppMessage } from "../fsm/handler.js";
 import { deliverOutbound } from "../services/whatsapp-send.js";
 
 export const whatsappRouter = Router();
+
+function isForwardAuthorized(req: Request): boolean {
+  if (!config.whatsapp.forwardSecret) return true;
+  const header = req.headers["x-webhook-forward-secret"];
+  return header === config.whatsapp.forwardSecret;
+}
+
+function isForThisPhoneNumber(value: Record<string, unknown> | undefined): boolean {
+  const expectedId = config.whatsapp.phoneNumberId;
+  if (!expectedId) return true;
+
+  const metadata = value?.metadata as { phone_number_id?: string } | undefined;
+  const incomingId = metadata?.phone_number_id;
+  if (!incomingId) return true;
+
+  return incomingId === expectedId;
+}
 
 whatsappRouter.get("/", (req, res) => {
   const mode = req.query["hub.mode"];
@@ -20,12 +38,21 @@ whatsappRouter.get("/", (req, res) => {
 whatsappRouter.post("/", async (req, res) => {
   res.sendStatus(200);
 
+  if (!isForwardAuthorized(req)) {
+    console.warn("[WhatsApp] POST rejeitado — forward secret inválido");
+    return;
+  }
+
   try {
     const entry = req.body?.entry?.[0];
     const change = entry?.changes?.[0];
     const value = change?.value;
-    const message = value?.messages?.[0];
 
+    if (!isForThisPhoneNumber(value)) {
+      return;
+    }
+
+    const message = value?.messages?.[0];
     if (!message) return;
 
     const from = message.from as string;

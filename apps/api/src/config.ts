@@ -22,6 +22,9 @@ export const config = {
     token: optional("WHATSAPP_TOKEN"),
     phoneNumberId: optional("PHONE_NUMBER_ID"),
     verifyToken: optional("VERIFY_TOKEN"),
+    wabaId: optional("WABA_ID"),
+    /** Quando o webhook Meta fica no Replit, exija este header no POST encaminhado */
+    forwardSecret: optional("WHATSAPP_FORWARD_SECRET"),
   },
   asaas: {
     apiKey: optional("ASAAS_API_KEY"),

@@ -67,16 +67,23 @@ adminRouter.get("/whatsapp-check", (req, res) => {
     return;
   }
 
-  const webhookUrl = `${config.apiUrl.replace(/\/$/, "")}/webhooks/whatsapp`;
+  const railwayWebhookUrl = `${config.apiUrl.replace(/\/$/, "")}/webhooks/whatsapp`;
+  const proxyMode = Boolean(config.whatsapp.forwardSecret);
 
   res.json({
     ok: isWhatsAppConfigured(),
-    webhookUrl,
-    verifyTokenConfigured: Boolean(config.whatsapp.verifyToken),
+    mode: proxyMode ? "replit-proxy" : "direct",
+    metaWebhook: "permanece no Replit — não altere na Meta",
+    replitForwardsTo: railwayWebhookUrl,
+    railwayWebhookUrl,
+    wabaId: config.whatsapp.wabaId || null,
     phoneNumberId: config.whatsapp.phoneNumberId || null,
     tokenConfigured: Boolean(config.whatsapp.token),
+    forwardSecretConfigured: proxyMode,
     message: isWhatsAppConfigured()
-      ? "Credenciais presentes. Configure o webhook na Meta com a URL acima."
+      ? proxyMode
+        ? "Railway pronta. Replit deve encaminhar POSTs com header X-Webhook-Forward-Secret."
+        : "Credenciais OK. Webhook pode apontar direto para a Railway."
       : "Configure WHATSAPP_TOKEN e PHONE_NUMBER_ID na Railway.",
   });
 });
