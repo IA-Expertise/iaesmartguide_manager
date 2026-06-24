@@ -15,9 +15,18 @@ export interface TenantPublic {
   }>;
 }
 
+function getApiUrl(): string {
+  return (
+    process.env.API_URL ??
+    process.env.NEXT_PUBLIC_API_URL ??
+    "http://localhost:3001"
+  );
+}
+
 export async function fetchTenant(slug: string): Promise<TenantPublic | null> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+  const apiUrl = getApiUrl();
   const res = await fetch(`${apiUrl}/api/tenants/${slug}`, {
+    cache: "no-store",
     next: { tags: [`tenant-${slug}`] },
   });
 

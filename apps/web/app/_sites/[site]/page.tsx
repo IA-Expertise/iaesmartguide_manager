@@ -7,6 +7,8 @@ interface PageProps {
   params: Promise<{ site: string }>;
 }
 
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { site } = await params;
   const tenant = await fetchTenant(site);
