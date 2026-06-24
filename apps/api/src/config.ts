@@ -13,7 +13,7 @@ function optional(key: string, fallback = ""): string {
 }
 
 export const config = {
-  port: Number(process.env.API_PORT ?? 3001),
+  port: Number(process.env.PORT ?? process.env.API_PORT ?? 3001),
   apiUrl: optional("API_URL", "http://localhost:3001"),
   jwtSecret: optional("JWT_SECRET", "dev-secret"),
   revalidateSecret: optional("REVALIDATE_SECRET", "dev-revalidate"),
