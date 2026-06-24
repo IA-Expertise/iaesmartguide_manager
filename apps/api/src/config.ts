@@ -40,9 +40,15 @@ export const config = {
 };
 
 export function assertProductionSecrets(): void {
-  if (process.env.NODE_ENV === "production") {
-    required("JWT_SECRET");
-    required("REVALIDATE_SECRET");
-    required("DATABASE_URL");
+  if (process.env.NODE_ENV !== "production") return;
+
+  required("JWT_SECRET");
+  required("REVALIDATE_SECRET");
+
+  const databaseUrl = required("DATABASE_URL");
+  if (databaseUrl.includes("localhost") || databaseUrl.includes("127.0.0.1")) {
+    throw new Error(
+      "DATABASE_URL aponta para localhost. No Railway, use Add Reference → PostgreSQL → DATABASE_URL"
+    );
   }
 }

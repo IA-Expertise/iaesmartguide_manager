@@ -3,9 +3,12 @@ import { resolve } from "node:path";
 import cors from "cors";
 import express from "express";
 
-dotenv.config({ path: resolve(process.cwd(), "../../.env") });
-dotenv.config();
-import { config } from "./config.js";
+// Em produção (Railway), variáveis vêm do painel — não carregar .env local
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config({ path: resolve(process.cwd(), "../../.env") });
+  dotenv.config();
+}
+import { config, assertProductionSecrets } from "./config.js";
 import { adminRouter } from "./routes/admin.js";
 import { asaasRouter } from "./routes/asaas.js";
 import { revalidateRouter } from "./routes/revalidate.js";
@@ -26,6 +29,8 @@ app.use("/webhooks/asaas", asaasRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/tenants", tenantsRouter);
 app.use("/api/revalidate", revalidateRouter);
+
+assertProductionSecrets();
 
 app.listen(config.port, () => {
   console.log(`API running on http://localhost:${config.port}`);
