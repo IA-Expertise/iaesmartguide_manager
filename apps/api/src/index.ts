@@ -6,6 +6,7 @@ import express from "express";
 dotenv.config({ path: resolve(process.cwd(), "../../.env") });
 dotenv.config();
 import { config } from "./config.js";
+import { adminRouter } from "./routes/admin.js";
 import { asaasRouter } from "./routes/asaas.js";
 import { revalidateRouter } from "./routes/revalidate.js";
 import { tenantsRouter } from "./routes/tenants.js";
@@ -22,6 +23,7 @@ app.get("/health", (_req, res) => {
 
 app.use("/webhooks/whatsapp", whatsappRouter);
 app.use("/webhooks/asaas", asaasRouter);
+app.use("/api/admin", adminRouter);
 app.use("/api/tenants", tenantsRouter);
 app.use("/api/revalidate", revalidateRouter);
 

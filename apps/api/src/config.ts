@@ -36,6 +36,7 @@ export const config = {
     publicUrl: optional("R2_PUBLIC_URL"),
   },
   geminiApiKey: optional("GEMINI_API_KEY"),
+  seedSecret: optional("SEED_SECRET"),
 };
 
 export function assertProductionSecrets(): void {

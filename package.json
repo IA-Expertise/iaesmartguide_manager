@@ -19,7 +19,7 @@
     "db:seed": "dotenv -e .env -- npx tsx packages/db/prisma/seed.ts",
     "db:studio": "dotenv -e .env -- npm run studio -w @iaesmartguide/db"
   },
-  "devDependencies": {
+  "dependencies": {
     "dotenv-cli": "^8.0.0",
     "tsx": "^4.19.2"
   },
