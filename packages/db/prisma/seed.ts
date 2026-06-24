@@ -1,5 +1,5 @@
 import { runSeed } from "../src/seed.js";
-import { prisma } from "../src/index.js";
+import { prisma } from "../src/client.js";
 
 runSeed()
   .then((result) => {

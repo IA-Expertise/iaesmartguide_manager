@@ -1,4 +1,4 @@
-import { prisma } from "./index.js";
+import { prisma } from "./client.js";
 
 export async function runSeed(): Promise<{ created: boolean; slug: string }> {
   const slug = "adegatoninho";
