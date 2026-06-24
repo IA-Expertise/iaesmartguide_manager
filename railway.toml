@@ -1,0 +1,8 @@
+[build]
+builder = "nixpacks"
+buildCommand = "npm install && npm run build:api"
+
+[deploy]
+startCommand = "npm run start:api"
+releaseCommand = "npx prisma db push --schema=packages/db/prisma/schema.prisma"
+restartPolicyType = "on_failure"

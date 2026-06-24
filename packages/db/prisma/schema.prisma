@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id             Int      @id @default(autoincrement())
+  ownerName      String   @map("owner_name") @db.VarChar(100)
+  whatsappNumber String   @unique @map("whatsapp_number") @db.VarChar(20)
+  businessName   String   @map("business_name") @db.VarChar(100)
+  slug           String   @unique @db.VarChar(50)
+  logoUrl        String?  @map("logo_url")
+  youtubeUrl     String?  @map("youtube_url")
+  description    String?
+  address        String?
+  isPublished    Boolean  @default(false) @map("is_published")
+  paymentStatus  String   @default("pending") @map("payment_status") @db.VarChar(20)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  photos   TenantPhoto[]
+  products TenantProduct[]
+  payments Payment[]
+
+  @@map("tenants")
+}
+
+model TenantPhoto {
+  id        Int      @id @default(autoincrement())
+  tenantId  Int      @map("tenant_id")
+  photoUrl  String   @map("photo_url")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_photos")
+}
+
+model TenantProduct {
+  id        Int      @id @default(autoincrement())
+  tenantId  Int      @map("tenant_id")
+  title     String   @db.VarChar(100)
+  price     String?  @db.VarChar(20)
+  imageUrl  String?  @map("image_url")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_products")
+}
+
+model ChatState {
+  whatsappNumber String   @id @map("whatsapp_number") @db.VarChar(20)
+  currentState   String   @map("current_state") @db.VarChar(50)
+  tempData       Json     @default("{}") @map("temp_data")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("chat_states")
+}
+
+model Payment {
+  id         Int      @id @default(autoincrement())
+  tenantId   Int?     @map("tenant_id")
+  externalId String   @unique @map("external_id") @db.VarChar(100)
+  amountCents Int     @map("amount_cents")
+  status     String   @db.VarChar(20)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@map("payments")
+}
+
+model AuthCode {
+  id             Int       @id @default(autoincrement())
+  whatsappNumber String    @map("whatsapp_number") @db.VarChar(20)
+  codeHash       String    @map("code_hash") @db.VarChar(64)
+  expiresAt      DateTime  @map("expires_at")
+  usedAt         DateTime? @map("used_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([whatsappNumber])
+  @@map("auth_codes")
+}
