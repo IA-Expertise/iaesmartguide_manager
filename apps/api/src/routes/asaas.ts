@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "@iaesmartguide/db";
 import { config } from "../config.js";
 import { ChatStates } from "../fsm/states.js";
+import { normalizePhone } from "../utils/phone.js";
 
 export const asaasRouter = Router();
 
@@ -78,10 +79,3 @@ asaasRouter.post("/", async (req, res) => {
     res.sendStatus(500);
   }
 });
-
-function normalizePhone(raw: unknown): string | null {
-  if (typeof raw !== "string") return null;
-  const digits = raw.replace(/\D/g, "");
-  if (digits.length < 10) return null;
-  return digits.startsWith("55") ? digits : `55${digits}`;
-}

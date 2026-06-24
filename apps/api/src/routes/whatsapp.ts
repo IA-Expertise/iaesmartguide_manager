@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { config } from "../config.js";
 import { handleWhatsAppMessage } from "../fsm/handler.js";
+import { deliverOutbound } from "../services/whatsapp-send.js";
 
 export const whatsappRouter = Router();
 
@@ -43,9 +44,8 @@ whatsappRouter.post("/", async (req, res) => {
     }
 
     const replies = await handleWhatsAppMessage(incoming);
-    // Envio real via Meta API será implementado na Fase 3
-    if (replies.length && process.env.NODE_ENV === "development") {
-      console.log(`[WhatsApp -> ${from}]`, replies.join(" | "));
+    if (replies.length) {
+      await deliverOutbound(from, replies);
     }
   } catch (error) {
     console.error("[WhatsApp webhook]", error);

@@ -1,9 +1,12 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { isR2Configured, uploadToR2 } from "../services/r2.js";
+import { isWhatsAppConfigured, sendWhatsAppText } from "../services/whatsapp-send.js";
 import { runDbPush } from "../lib/db-setup.js";
 import { runSeed } from "../lib/seed.js";
 import { config } from "../config.js";
+import { ChatStates } from "../fsm/states.js";
+import { normalizePhone } from "../utils/phone.js";
 
 export const adminRouter = Router();
 
@@ -55,6 +58,132 @@ adminRouter.get("/r2-check", async (req, res) => {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: "R2 upload failed", detail });
+  }
+});
+
+adminRouter.get("/whatsapp-check", (req, res) => {
+  if (!checkSecret(req.query.secret as string | undefined)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const webhookUrl = `${config.apiUrl.replace(/\/$/, "")}/webhooks/whatsapp`;
+
+  res.json({
+    ok: isWhatsAppConfigured(),
+    webhookUrl,
+    verifyTokenConfigured: Boolean(config.whatsapp.verifyToken),
+    phoneNumberId: config.whatsapp.phoneNumberId || null,
+    tokenConfigured: Boolean(config.whatsapp.token),
+    message: isWhatsAppConfigured()
+      ? "Credenciais presentes. Configure o webhook na Meta com a URL acima."
+      : "Configure WHATSAPP_TOKEN e PHONE_NUMBER_ID na Railway.",
+  });
+});
+
+adminRouter.get("/whatsapp-test-send", async (req, res) => {
+  if (!checkSecret(req.query.secret as string | undefined)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const phone = normalizePhone(String(req.query.phone ?? ""));
+  if (!phone) {
+    res.status(400).json({ error: "Informe ?phone=5511999999999" });
+    return;
+  }
+
+  if (!isWhatsAppConfigured()) {
+    res.status(503).json({ error: "WhatsApp não configurado na API" });
+    return;
+  }
+
+  try {
+    await sendWhatsAppText(
+      phone,
+      "IAE Smart Guide: conexão OK! Envie qualquer mensagem para começar o cadastro do seu mini-site."
+    );
+    res.json({ ok: true, sentTo: phone });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: "Falha ao enviar", detail });
+  }
+});
+
+adminRouter.get("/whatsapp-prepare-test", async (req, res) => {
+  if (!checkSecret(req.query.secret as string | undefined)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const phone = normalizePhone(String(req.query.phone ?? ""));
+  if (!phone) {
+    res.status(400).json({ error: "Informe ?phone=5511999999999 (seu número com DDD)" });
+    return;
+  }
+
+  const prisma = new PrismaClient();
+  try {
+    await prisma.tenant.upsert({
+      where: { whatsappNumber: phone },
+      create: {
+        whatsappNumber: phone,
+        ownerName: "Teste",
+        businessName: "Pendente",
+        slug: `pending-${phone.slice(-8)}`,
+        paymentStatus: "paid",
+      },
+      update: { paymentStatus: "paid" },
+    });
+
+    await prisma.chatState.upsert({
+      where: { whatsappNumber: phone },
+      create: {
+        whatsappNumber: phone,
+        currentState: ChatStates.START,
+        tempData: {},
+      },
+      update: {
+        currentState: ChatStates.START,
+        tempData: {},
+      },
+    });
+
+    res.json({
+      ok: true,
+      phone,
+      message:
+        "Número liberado para teste (pagamento simulado). Envie uma mensagem no WhatsApp para iniciar o cadastro.",
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: "Falha ao preparar teste", detail });
+  } finally {
+    await prisma.$disconnect();
+  }
+});
+
+adminRouter.get("/whatsapp-reset", async (req, res) => {
+  if (!checkSecret(req.query.secret as string | undefined)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const phone = normalizePhone(String(req.query.phone ?? ""));
+  if (!phone) {
+    res.status(400).json({ error: "Informe ?phone=5511999999999" });
+    return;
+  }
+
+  const prisma = new PrismaClient();
+  try {
+    await prisma.chatState.deleteMany({ where: { whatsappNumber: phone } });
+    res.json({ ok: true, phone, message: "Estado da conversa resetado." });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: "Falha ao resetar", detail });
+  } finally {
+    await prisma.$disconnect();
   }
 });
 

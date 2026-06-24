@@ -3,7 +3,14 @@ import type { TempData } from "../fsm/states.js";
 import { ChatStates } from "../fsm/states.js";
 import { persistWhatsAppImage, resolveMediaUrl, resolveMediaUrls } from "../services/media.js";
 import { revalidateTenant } from "../services/revalidate.js";
+import {
+  buttonsMessage,
+  textMessage,
+  type WhatsAppOutbound,
+} from "../services/whatsapp-send.js";
+import { isPlaceholderSlug } from "../utils/phone.js";
 import { slugify } from "../utils/slugify.js";
+import { config } from "../config.js";
 
 interface IncomingMessage {
   from: string;
@@ -13,9 +20,13 @@ interface IncomingMessage {
   buttonId?: string;
 }
 
-export async function handleWhatsAppMessage(message: IncomingMessage): Promise<string[]> {
-  const replies: string[] = [];
+const ADVANCE_PHOTOS = [{ id: "advance_photos", title: "Avançar" }];
+const SKIP_YOUTUBE = [{ id: "skip_youtube", title: "Pular" }];
+
+export async function handleWhatsAppMessage(message: IncomingMessage): Promise<WhatsAppOutbound[]> {
+  const replies: WhatsAppOutbound[] = [];
   const phone = message.from;
+  const domain = config.rootDomain;
 
   let state = await prisma.chatState.findUnique({ where: { whatsappNumber: phone } });
   const tenant = await prisma.tenant.findUnique({ where: { whatsappNumber: phone } });
@@ -36,20 +47,26 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<s
   switch (currentState) {
     case ChatStates.START: {
       if (tenant?.paymentStatus === "paid") {
-        if (tenant.slug) {
+        if (!isPlaceholderSlug(tenant.slug)) {
           await prisma.chatState.update({
             where: { whatsappNumber: phone },
             data: { currentState: ChatStates.CONFIRMED },
           });
           replies.push(
-            `Olá! Seu site já está ativo em https://${tenant.slug}.${process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "iaesmartguide.com.br"}. Envie uma mensagem para atualizar produtos ou fotos.`
+            textMessage(
+              `Olá! Seu site já está ativo em https://${tenant!.slug}.${domain}. Envie uma mensagem para atualizar produtos ou fotos.`
+            )
           );
         } else {
           await prisma.chatState.update({
             where: { whatsappNumber: phone },
             data: { currentState: ChatStates.COLLECTING_NAME },
           });
-          replies.push("Pagamento confirmado! Digite o nome comercial do seu local (Ex: Adega do Toninho).");
+          replies.push(
+            textMessage(
+              "Pagamento confirmado! Digite o nome comercial do seu local (Ex: Adega do Toninho)."
+            )
+          );
         }
       } else {
         await prisma.chatState.update({
@@ -57,15 +74,26 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<s
           data: { currentState: ChatStates.WAITING_PAYMENT },
         });
         replies.push(
-          "Bem-vindo ao IAE Smart Guide! Crie seu mini-site institucional em minutos. O link de pagamento será enviado em breve."
+          textMessage(
+            "Bem-vindo ao IAE Smart Guide! Crie seu mini-site institucional em minutos. O link de pagamento será enviado em breve."
+          )
         );
       }
       break;
     }
 
+    case ChatStates.WAITING_PAYMENT: {
+      replies.push(
+        textMessage(
+          "Aguardando confirmação do pagamento. Assim que for aprovado, você poderá montar seu site por aqui."
+        )
+      );
+      break;
+    }
+
     case ChatStates.COLLECTING_NAME: {
       if (message.type !== "text" || !message.text?.trim()) {
-        replies.push("Por favor, envie o nome comercial em texto.");
+        replies.push(textMessage("Por favor, envie o nome comercial em texto."));
         break;
       }
       const businessName = message.text.trim();
@@ -82,13 +110,13 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<s
           tempData: { ...tempData, businessName, slug },
         },
       });
-      replies.push(`Ótimo! Agora envie a imagem do logotipo de "${businessName}".`);
+      replies.push(textMessage(`Ótimo! Agora envie a imagem do logotipo de "${businessName}".`));
       break;
     }
 
     case ChatStates.COLLECTING_LOGO: {
       if (message.type !== "image" || !message.imageId) {
-        replies.push("Envie uma imagem para o logotipo.");
+        replies.push(textMessage("Envie uma imagem para o logotipo."));
         break;
       }
       const slug = tempData.slug!;
@@ -101,10 +129,15 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<s
             tempData: { ...tempData, logoUrl, photos: [] },
           },
         });
-        replies.push("Logo recebido! Envie até 5 fotos do local. Quando terminar, toque em ➡️ Avançar.");
+        replies.push(
+          buttonsMessage(
+            "Logo recebido! Envie até 5 fotos do local. Quando terminar, toque em Avançar.",
+            ADVANCE_PHOTOS
+          )
+        );
       } catch (error) {
         console.error("[FSM logo upload]", error);
-        replies.push("Não consegui salvar o logo. Tente enviar a imagem novamente.");
+        replies.push(textMessage("Não consegui salvar o logo. Tente enviar a imagem novamente."));
       }
       break;
     }
@@ -115,7 +148,12 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<s
           where: { whatsappNumber: phone },
           data: { currentState: ChatStates.COLLECTING_YOUTUBE },
         });
-        replies.push("Envie o link do YouTube (opcional) ou toque em Pular.");
+        replies.push(
+          buttonsMessage(
+            "Envie o link do YouTube (opcional) ou toque em Pular.",
+            SKIP_YOUTUBE
+          )
+        );
         break;
       }
       if (message.type === "image" && message.imageId) {
@@ -127,15 +165,23 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<s
             data: { tempData: { ...tempData, photos } },
           });
           replies.push(
-            `Foto ${photos.length}/5 recebida. Envie mais ou toque em ➡️ Avançar para Próxima Etapa.`
+            buttonsMessage(
+              `Foto ${photos.length}/5 recebida. Envie mais ou toque em Avançar.`,
+              ADVANCE_PHOTOS
+            )
           );
         } catch (error) {
           console.error("[FSM photo upload]", error);
-          replies.push("Não consegui salvar a foto. Tente enviar novamente.");
+          replies.push(textMessage("Não consegui salvar a foto. Tente enviar novamente."));
         }
         break;
       }
-      replies.push("Envie fotos ou toque no botão para avançar.");
+      replies.push(
+        buttonsMessage(
+          "Envie fotos ou toque em Avançar para a próxima etapa.",
+          ADVANCE_PHOTOS
+        )
+      );
       break;
     }
 
@@ -145,7 +191,12 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<s
       } else if (message.type === "text") {
         tempData.youtubeUrl = message.text?.trim() ?? null;
       } else {
-        replies.push("Envie o link do YouTube ou toque em Pular.");
+        replies.push(
+          buttonsMessage(
+            "Envie o link do YouTube ou toque em Pular.",
+            SKIP_YOUTUBE
+          )
+        );
         break;
       }
 
@@ -170,13 +221,14 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<s
           logoUrl,
           youtubeUrl: tempData.youtubeUrl ?? undefined,
           paymentStatus: "paid",
-          isPublished: false,
+          isPublished: true,
         },
         update: {
           businessName,
           slug,
           logoUrl,
           youtubeUrl: tempData.youtubeUrl ?? undefined,
+          isPublished: true,
         },
       });
 
@@ -194,19 +246,22 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<s
         data: { currentState: ChatStates.CONFIRMED, tempData: {} },
       });
 
-      const domain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "iaesmartguide.com.br";
-      replies.push(`Seu site está pronto! Acesse: https://${slug}.${domain}`);
+      replies.push(textMessage(`Seu site está pronto! Acesse: https://${slug}.${domain}`));
       break;
     }
 
     case ChatStates.CONFIRMED:
     case ChatStates.EDITING: {
-      replies.push("Atualizações via IA serão implementadas na Fase 5. Use o painel web por enquanto.");
+      replies.push(
+        textMessage(
+          "Atualizações via IA serão implementadas em breve. Use o painel web por enquanto."
+        )
+      );
       break;
     }
 
     default:
-      replies.push("Não entendi. Envie 'Oi' para recomeçar.");
+      replies.push(textMessage("Não entendi. Envie qualquer mensagem para recomeçar."));
   }
 
   return replies;
