@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
+import { runDbPush } from "../lib/db-setup.js";
 import { runSeed } from "../lib/seed.js";
 import { config } from "../config.js";
 
@@ -25,6 +26,28 @@ adminRouter.get("/db-check", async (req, res) => {
     res.status(500).json({ error: "Database connection failed", detail });
   } finally {
     await prisma.$disconnect();
+  }
+});
+
+adminRouter.get("/setup", async (req, res) => {
+  if (!checkSecret(req.query.secret as string | undefined)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    runDbPush();
+    const result = await runSeed();
+    res.json({
+      ok: true,
+      schema: "synced",
+      message: result.created ? "Tenant criado" : "Tenant já existia",
+      slug: result.slug,
+    });
+  } catch (error) {
+    console.error("[admin/setup]", error);
+    const detail = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: "Setup failed", detail });
   }
 });
 

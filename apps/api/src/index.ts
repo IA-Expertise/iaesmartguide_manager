@@ -30,7 +30,18 @@ app.use("/api/admin", adminRouter);
 app.use("/api/tenants", tenantsRouter);
 app.use("/api/revalidate", revalidateRouter);
 
+import { runDbPush } from "./lib/db-setup.js";
+
 assertProductionSecrets();
+
+if (process.env.NODE_ENV === "production") {
+  try {
+    runDbPush();
+    console.log("[db] schema sincronizado no startup");
+  } catch (error) {
+    console.error("[db] falha ao sincronizar schema no startup:", error);
+  }
+}
 
 app.listen(config.port, () => {
   console.log(`API running on http://localhost:${config.port}`);
