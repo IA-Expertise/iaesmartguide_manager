@@ -149,7 +149,7 @@ export function marketingErrorMessage(error: unknown): string {
   if (msg.includes("GEMINI_NOT_CONFIGURED")) {
     return "A Lia com IA ainda não está ligada 🤖\n\nPeça para configurar *GEMINI_API_KEY* no Railway.";
   }
-  if (msg.includes("GEMINI_TIMEOUT")) {
+  if (msg.includes("GEMINI_TIMEOUT") || msg.includes("HANDLER_TIMEOUT") || msg.includes("AbortError")) {
     return "Demorou mais que o esperado ⏳ Tenta de novo — às vezes a IA fica sobrecarregada.";
   }
   if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) {

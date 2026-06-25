@@ -1,27 +1,67 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { config } from "../config.js";
 
-/** Modelos ativos na API Gemini (2.0/1.5 foram desligados em 2026) */
-const MODELS = ["gemini-2.5-flash", "gemini-3.1-flash-lite", "gemini-3.5-flash"] as const;
-const GEMINI_TIMEOUT_MS = 25_000;
+const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
+const MODELS = ["gemini-2.5-flash", "gemini-3.1-flash-lite"] as const;
+const GEMINI_TIMEOUT_MS = 20_000;
 
 export function isGeminiConfigured(): boolean {
   return Boolean(config.geminiApiKey?.trim());
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`GEMINI_TIMEOUT:${label}`)), ms);
-    promise
-      .then((value) => {
-        clearTimeout(timer);
-        resolve(value);
-      })
-      .catch((error) => {
-        clearTimeout(timer);
-        reject(error);
-      });
-  });
+interface GeminiApiResponse {
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string }> };
+  }>;
+  error?: { message?: string; status?: string; code?: number };
+}
+
+async function callGeminiModel(
+  modelName: string,
+  systemInstruction: string,
+  userPrompt: string
+): Promise<string> {
+  const url = `${API_BASE}/models/${modelName}:generateContent?key=${encodeURIComponent(config.geminiApiKey)}`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        generationConfig: {
+          maxOutputTokens: 1024,
+          temperature: 0.85,
+        },
+      }),
+    });
+
+    const data = (await res.json()) as GeminiApiResponse;
+
+    if (!res.ok) {
+      const detail = data.error?.message ?? res.statusText;
+      throw new Error(`GEMINI_HTTP_${res.status}:${detail}`);
+    }
+
+    const text = data.candidates?.[0]?.content?.parts
+      ?.map((part) => part.text ?? "")
+      .join("")
+      .trim();
+
+    if (!text) throw new Error("GEMINI_EMPTY");
+    return text;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`GEMINI_TIMEOUT:${modelName}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function errorDetail(error: unknown): string {
@@ -37,22 +77,11 @@ export async function runGeminiPrompt(
     throw new Error("GEMINI_NOT_CONFIGURED");
   }
 
-  const genAI = new GoogleGenerativeAI(config.geminiApiKey);
   let lastError: unknown;
 
   for (const modelName of MODELS) {
     try {
-      const model = genAI.getGenerativeModel({
-        model: modelName,
-        systemInstruction,
-      });
-      const result = await withTimeout(
-        model.generateContent(userPrompt),
-        GEMINI_TIMEOUT_MS,
-        modelName
-      );
-      const text = result.response.text()?.trim();
-      if (!text) throw new Error("GEMINI_EMPTY");
+      const text = await callGeminiModel(modelName, systemInstruction, userPrompt);
       console.log(`[Gemini] ok model=${modelName} chars=${text.length}`);
       return text;
     } catch (error) {

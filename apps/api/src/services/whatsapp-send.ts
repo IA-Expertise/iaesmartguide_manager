@@ -123,14 +123,30 @@ export async function sendWhatsAppList(
   });
 }
 
+const OUTBOUND_DELAY_MS = 400;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function deliverOutbound(to: string, messages: WhatsAppOutbound[]): Promise<void> {
-  for (const message of messages) {
-    if (message.type === "text") {
-      await sendWhatsAppText(to, message.body);
-    } else if (message.type === "buttons") {
-      await sendWhatsAppButtons(to, message.body, message.buttons);
-    } else {
-      await sendWhatsAppList(to, message.body, message.buttonLabel, message.sections);
+  for (let i = 0; i < messages.length; i++) {
+    const message = messages[i];
+    try {
+      if (message.type === "text") {
+        await sendWhatsAppText(to, message.body);
+      } else if (message.type === "buttons") {
+        await sendWhatsAppButtons(to, message.body, message.buttons);
+      } else {
+        await sendWhatsAppList(to, message.body, message.buttonLabel, message.sections);
+      }
+    } catch (error) {
+      console.error(`[WhatsApp] falha ao enviar mensagem ${i + 1}/${messages.length}`, error);
+      throw error;
+    }
+
+    if (i < messages.length - 1) {
+      await sleep(OUTBOUND_DELAY_MS);
     }
   }
 }

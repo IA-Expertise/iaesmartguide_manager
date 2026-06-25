@@ -2,12 +2,47 @@ import type { Request } from "express";
 import { Router } from "express";
 import { config } from "../config.js";
 import { handleWhatsAppMessage } from "../fsm/handler.js";
-import { deliverOutbound } from "../services/whatsapp-send.js";
+import {
+  deliverOutbound,
+  sendWhatsAppText,
+  textMessage,
+} from "../services/whatsapp-send.js";
+import {
+  isGeminiConfigured,
+  marketingKindFromAction,
+} from "../services/lia-marketing.js";
 import { enqueueForPhone } from "../lib/whatsapp-queue.js";
 import { isDuplicateWebhookMessage } from "../lib/whatsapp-dedup.js";
 import { canonicalBrazilWhatsApp } from "../utils/phone.js";
 
 export const whatsappRouter = Router();
+
+const HANDLER_TIMEOUT_MS = 55_000;
+
+function isMarketingGenerateAction(
+  incoming: Parameters<typeof handleWhatsAppMessage>[0]
+): boolean {
+  if (incoming.type !== "interactive" || !incoming.buttonId?.startsWith("lia_")) {
+    return false;
+  }
+  if (incoming.buttonId === "open_divulgar") return false;
+  return Boolean(marketingKindFromAction(incoming.buttonId));
+}
+
+function withHandlerTimeout<T>(fn: () => Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("HANDLER_TIMEOUT")), ms);
+    fn()
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
 
 function isForwardAuthorized(req: Request): boolean {
   if (!config.whatsapp.forwardSecret) return true;
@@ -93,9 +128,30 @@ whatsappRouter.post("/", async (req, res) => {
     }
 
     await enqueueForPhone(canonical, async () => {
-      const replies = await handleWhatsAppMessage(incoming);
-      if (replies.length) {
-        await deliverOutbound(from, replies);
+      try {
+        if (isMarketingGenerateAction(incoming) && isGeminiConfigured()) {
+          await sendWhatsAppText(from, "⏳ Gerando seu texto com IA... só um instante!");
+        }
+
+        const replies = await withHandlerTimeout(
+          () => handleWhatsAppMessage(incoming),
+          HANDLER_TIMEOUT_MS
+        );
+
+        if (replies.length) {
+          await deliverOutbound(from, replies);
+        }
+      } catch (error) {
+        console.error("[WhatsApp handler]", error);
+        try {
+          const body =
+            error instanceof Error && error.message === "HANDLER_TIMEOUT"
+              ? "Demorei demais pra gerar o texto ⏳ Tenta de novo — se persistir, envie *menu*."
+              : "Algo deu errado por aqui 😅 Envie *menu* para tentar de novo.";
+          await deliverOutbound(from, [textMessage(body)]);
+        } catch (sendError) {
+          console.error("[WhatsApp] falha ao enviar mensagem de erro", sendError);
+        }
       }
     });
   } catch (error) {
