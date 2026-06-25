@@ -12,6 +12,12 @@ function optional(key: string, fallback = ""): string {
   return process.env[key] ?? fallback;
 }
 
+function optionalBool(key: string, fallback = false): boolean {
+  const value = process.env[key];
+  if (value === undefined) return fallback;
+  return value === "true" || value === "1";
+}
+
 export const config = {
   port: Number(process.env.PORT ?? process.env.API_PORT ?? 3001),
   apiUrl: optional("API_URL", "http://localhost:3001"),
@@ -25,6 +31,8 @@ export const config = {
     wabaId: optional("WABA_ID"),
     /** Quando o webhook Meta fica no Replit, exija este header no POST encaminhado */
     forwardSecret: optional("WHATSAPP_FORWARD_SECRET"),
+    /** Ative como "true" quando Asaas (Fase 4) estiver integrado */
+    requirePayment: optionalBool("WHATSAPP_REQUIRE_PAYMENT", false),
   },
   asaas: {
     apiKey: optional("ASAAS_API_KEY"),

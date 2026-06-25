@@ -24,6 +24,40 @@ interface IncomingMessage {
 const ADVANCE_PHOTOS = [{ id: "advance_photos", title: "Avançar" }];
 const SKIP_YOUTUBE = [{ id: "skip_youtube", title: "Pular" }];
 
+function canStartOnboarding(tenant: Awaited<ReturnType<typeof findTenantByWhatsApp>>): boolean {
+  if (!config.whatsapp.requirePayment) return true;
+  return tenant?.paymentStatus === "paid";
+}
+
+async function beginOnboarding(
+  phone: string,
+  tenant: Awaited<ReturnType<typeof findTenantByWhatsApp>>,
+  domain: string
+): Promise<WhatsAppOutbound[]> {
+  if (tenant && !isPlaceholderSlug(tenant.slug)) {
+    await prisma.chatState.update({
+      where: { whatsappNumber: phone },
+      data: { currentState: ChatStates.CONFIRMED },
+    });
+    return [
+      textMessage(
+        `Olá! Seu site já está ativo em https://${tenant.slug}.${domain}. Envie uma mensagem para atualizar produtos ou fotos.`
+      ),
+    ];
+  }
+
+  await prisma.chatState.update({
+    where: { whatsappNumber: phone },
+    data: { currentState: ChatStates.COLLECTING_NAME },
+  });
+
+  const intro = config.whatsapp.requirePayment
+    ? "Pagamento confirmado! Digite o nome comercial do seu local (Ex: Adega do Toninho)."
+    : "Bem-vindo ao IAE Smart Guide! Digite o nome comercial do seu local (Ex: Adega do Toninho).";
+
+  return [textMessage(intro)];
+}
+
 export async function handleWhatsAppMessage(message: IncomingMessage): Promise<WhatsAppOutbound[]> {
   const replies: WhatsAppOutbound[] = [];
   const domain = config.rootDomain;
@@ -34,30 +68,14 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<W
   const currentState = state.currentState;
   const tempData = (state.tempData ?? {}) as TempData;
 
+  console.log(
+    `[FSM] from=${message.from} phone=${phone} state=${currentState} payment=${tenant?.paymentStatus ?? "none"} requirePayment=${config.whatsapp.requirePayment}`
+  );
+
   switch (currentState) {
     case ChatStates.START: {
-      if (tenant?.paymentStatus === "paid") {
-        if (!isPlaceholderSlug(tenant.slug)) {
-          await prisma.chatState.update({
-            where: { whatsappNumber: phone },
-            data: { currentState: ChatStates.CONFIRMED },
-          });
-          replies.push(
-            textMessage(
-              `Olá! Seu site já está ativo em https://${tenant!.slug}.${domain}. Envie uma mensagem para atualizar produtos ou fotos.`
-            )
-          );
-        } else {
-          await prisma.chatState.update({
-            where: { whatsappNumber: phone },
-            data: { currentState: ChatStates.COLLECTING_NAME },
-          });
-          replies.push(
-            textMessage(
-              "Pagamento confirmado! Digite o nome comercial do seu local (Ex: Adega do Toninho)."
-            )
-          );
-        }
+      if (canStartOnboarding(tenant)) {
+        replies.push(...(await beginOnboarding(phone, tenant, domain)));
       } else {
         await prisma.chatState.update({
           where: { whatsappNumber: phone },
@@ -74,28 +92,8 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<W
 
     case ChatStates.WAITING_PAYMENT: {
       const freshTenant = await findTenantByWhatsApp(prisma, phone);
-      if (freshTenant?.paymentStatus === "paid") {
-        if (!isPlaceholderSlug(freshTenant.slug)) {
-          await prisma.chatState.update({
-            where: { whatsappNumber: phone },
-            data: { currentState: ChatStates.CONFIRMED },
-          });
-          replies.push(
-            textMessage(
-              `Pagamento confirmado! Seu site está em https://${freshTenant.slug}.${domain}. Envie uma mensagem para atualizar.`
-            )
-          );
-        } else {
-          await prisma.chatState.update({
-            where: { whatsappNumber: phone },
-            data: { currentState: ChatStates.COLLECTING_NAME },
-          });
-          replies.push(
-            textMessage(
-              "Pagamento confirmado! Digite o nome comercial do seu local (Ex: Adega do Toninho)."
-            )
-          );
-        }
+      if (canStartOnboarding(freshTenant)) {
+        replies.push(...(await beginOnboarding(phone, freshTenant, domain)));
       } else {
         replies.push(
           textMessage(

@@ -85,6 +85,7 @@ adminRouter.get("/whatsapp-check", (req, res) => {
     phoneNumberId: config.whatsapp.phoneNumberId || null,
     tokenConfigured: Boolean(config.whatsapp.token),
     forwardSecretConfigured: proxyMode,
+    requirePayment: config.whatsapp.requirePayment,
     message: isWhatsAppConfigured()
       ? proxyMode
         ? "Railway pronta. Replit deve encaminhar POSTs com header X-Webhook-Forward-Secret."
