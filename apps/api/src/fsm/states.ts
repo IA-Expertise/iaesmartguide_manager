@@ -13,6 +13,8 @@ export const ChatStates = {
   EDITING_PRODUCT_TITLE: "EDITING_PRODUCT_TITLE",
   EDITING_PRODUCT_PRICE: "EDITING_PRODUCT_PRICE",
   EDITING_PRODUCT_IMAGE: "EDITING_PRODUCT_IMAGE",
+  EDITING_DELETE_PRODUCT: "EDITING_DELETE_PRODUCT",
+  EDITING_DELETE_PRODUCT_CONFIRM: "EDITING_DELETE_PRODUCT_CONFIRM",
   EDITING_YOUTUBE: "EDITING_YOUTUBE",
   /** @deprecated use EDITING_* states */
   EDITING: "EDITING",
@@ -31,4 +33,5 @@ export interface TempData {
   productTitle?: string;
   productPrice?: string | null;
   productImageUrl?: string;
+  productIdToDelete?: number;
 }

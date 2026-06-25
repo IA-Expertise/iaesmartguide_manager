@@ -20,6 +20,7 @@ const SKIP_YOUTUBE = [{ id: "skip_youtube", title: "Pular" }];
 const SKIP_PRODUCT_PRICE = [{ id: "skip_product_price", title: "Sem preço" }];
 const SKIP_PRODUCT_IMAGE = [{ id: "skip_product_image", title: "Sem foto" }];
 const CANCEL_EDIT = [{ id: "cancel_edit", title: "Cancelar" }];
+const CONFIRM_DELETE_PRODUCT = [{ id: "confirm_delete_product", title: "Sim, remover" }];
 
 const EDIT_STATES = new Set<string>([
   ChatStates.CONFIRMED,
@@ -31,6 +32,8 @@ const EDIT_STATES = new Set<string>([
   ChatStates.EDITING_PRODUCT_TITLE,
   ChatStates.EDITING_PRODUCT_PRICE,
   ChatStates.EDITING_PRODUCT_IMAGE,
+  ChatStates.EDITING_DELETE_PRODUCT,
+  ChatStates.EDITING_DELETE_PRODUCT_CONFIRM,
   ChatStates.EDITING_YOUTUBE,
 ]);
 
@@ -63,6 +66,7 @@ export function editMenuMessage(slug: string): WhatsAppOutbound {
         title: "Produtos",
         rows: [
           { id: "add_product", title: "Novo produto", description: "Nome, preço e foto" },
+          { id: "delete_product", title: "Excluir oferta", description: "Remover do site" },
         ],
       },
     ]
@@ -113,6 +117,25 @@ async function loadTenant(phone: string) {
   });
 }
 
+function productDeleteListMessage(
+  products: Array<{ id: number; title: string; price: string | null }>
+): WhatsAppOutbound {
+  return listMessage(
+    "Qual oferta deseja remover do site?",
+    "Ver ofertas",
+    [
+      {
+        title: "Ofertas",
+        rows: products.slice(0, 10).map((product) => ({
+          id: `del_prod_${product.id}`,
+          title: product.title.slice(0, 24),
+          description: (product.price ?? "Sem preço").slice(0, 72),
+        })),
+      },
+    ]
+  );
+}
+
 async function handleMenuAction(
   phone: string,
   actionId: string,
@@ -161,6 +184,20 @@ async function handleMenuAction(
         data: { currentState: ChatStates.EDITING_PRODUCT_TITLE, tempData: {} },
       });
       return [buttonsMessage("Qual o nome do produto ou oferta?", CANCEL_EDIT)];
+    case "delete_product": {
+      const withProducts = await loadTenant(phone);
+      if (!withProducts?.products.length) {
+        return [
+          textMessage("Você ainda não tem ofertas cadastradas."),
+          editMenuMessage(slug),
+        ];
+      }
+      await prisma.chatState.update({
+        where: { whatsappNumber: phone },
+        data: { currentState: ChatStates.EDITING_DELETE_PRODUCT, tempData: {} },
+      });
+      return [productDeleteListMessage(withProducts.products)];
+    }
     case "edit_youtube":
       await prisma.chatState.update({
         where: { whatsappNumber: phone },
@@ -377,6 +414,64 @@ export async function handleEditingMessage(
         },
       });
       return finishEdit(phone, slug, `Produto "${title}" adicionado!`);
+    }
+
+    case ChatStates.EDITING_DELETE_PRODUCT: {
+      if (message.type === "interactive" && message.buttonId?.startsWith("del_prod_")) {
+        const productId = Number.parseInt(message.buttonId.replace("del_prod_", ""), 10);
+        const product = tenant.products.find((p) => p.id === productId);
+        if (!product) {
+          return [textMessage("Oferta não encontrada."), editMenuMessage(slug)];
+        }
+        await prisma.chatState.update({
+          where: { whatsappNumber: phone },
+          data: {
+            currentState: ChatStates.EDITING_DELETE_PRODUCT_CONFIRM,
+            tempData: { ...tempData, productIdToDelete: productId },
+          },
+        });
+        const label = product.price ? `${product.title} (${product.price})` : product.title;
+        return [
+          buttonsMessage(`Remover "${label}" do site?`, [
+            ...CONFIRM_DELETE_PRODUCT,
+            ...CANCEL_EDIT,
+          ]),
+        ];
+      }
+      if (menuTrigger(message)) {
+        return [editMenuMessage(slug)];
+      }
+      if (!tenant.products.length) {
+        return [textMessage("Nenhuma oferta para remover."), editMenuMessage(slug)];
+      }
+      return [
+        textMessage("Toque em *Ver ofertas* e escolha qual remover."),
+        productDeleteListMessage(tenant.products),
+      ];
+    }
+
+    case ChatStates.EDITING_DELETE_PRODUCT_CONFIRM: {
+      if (message.type === "interactive" && message.buttonId === "confirm_delete_product") {
+        const productId = tempData.productIdToDelete;
+        if (!productId) {
+          return cancelEdit(phone, slug);
+        }
+        const product = tenant.products.find((p) => p.id === productId);
+        const deleted = await prisma.tenantProduct.deleteMany({
+          where: { id: productId, tenantId: tenant.id },
+        });
+        if (!deleted.count) {
+          return [textMessage("Oferta não encontrada ou já foi removida."), editMenuMessage(slug)];
+        }
+        const name = product?.title ?? "Oferta";
+        return finishEdit(phone, slug, `"${name}" removida!`);
+      }
+      return [
+        buttonsMessage('Toque em "Sim, remover" para confirmar.', [
+          ...CONFIRM_DELETE_PRODUCT,
+          ...CANCEL_EDIT,
+        ]),
+      ];
     }
 
     case ChatStates.EDITING_YOUTUBE: {
