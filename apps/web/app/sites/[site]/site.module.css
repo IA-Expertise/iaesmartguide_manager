@@ -13,7 +13,7 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  padding: 1.75rem 1rem 2.25rem;
+  padding: 2rem 1rem 2.5rem;
   color: #fff;
   text-align: center;
 }
@@ -53,9 +53,9 @@
   position: relative;
   z-index: 1;
   display: block;
-  width: 140px;
-  height: 140px;
-  margin: 0 auto 0.85rem;
+  width: min(280px, 78vw);
+  height: min(280px, 78vw);
+  margin: 0 auto 1rem;
   object-fit: contain;
   /* Fallback visual se o arquivo ainda tiver fundo escuro (JPEG do WhatsApp) */
   mix-blend-mode: lighten;
@@ -67,11 +67,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 140px;
-  height: 140px;
-  margin: 0 auto 0.85rem;
+  width: min(280px, 78vw);
+  height: min(280px, 78vw);
+  margin: 0 auto 1rem;
   font-family: var(--font-display);
-  font-size: 3.5rem;
+  font-size: clamp(4rem, 18vw, 6.5rem);
   font-weight: 600;
   color: #fff;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
