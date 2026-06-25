@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { isR2Configured, uploadToR2 } from "../services/r2.js";
-import { isGeminiConfigured } from "../services/gemini.js";
+import { isGeminiConfigured, runGeminiPrompt } from "../services/gemini.js";
 import { isWhatsAppConfigured, sendWhatsAppText } from "../services/whatsapp-send.js";
 import { runDbPush } from "../lib/db-setup.js";
 import { runSeed } from "../lib/seed.js";
@@ -94,6 +94,30 @@ adminRouter.get("/whatsapp-check", (req, res) => {
         : "Credenciais OK. Webhook pode apontar direto para a Railway."
       : "Configure WHATSAPP_TOKEN e PHONE_NUMBER_ID na Railway.",
   });
+});
+
+adminRouter.get("/gemini-test", async (req, res) => {
+  if (!checkSecret(req.query.secret as string | undefined)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  if (!isGeminiConfigured()) {
+    res.status(503).json({ ok: false, error: "GEMINI_API_KEY não configurada" });
+    return;
+  }
+
+  try {
+    const text = await runGeminiPrompt(
+      "Responda em português, uma frase curta.",
+      "Diga apenas: Lia online."
+    );
+    res.json({ ok: true, sample: text.slice(0, 120) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[admin/gemini-test]", error);
+    res.status(502).json({ ok: false, error: message });
+  }
 });
 
 adminRouter.get("/whatsapp-test-send", async (req, res) => {

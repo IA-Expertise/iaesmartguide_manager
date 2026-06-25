@@ -143,6 +143,28 @@ export function geminiUnavailableMessage(): WhatsAppOutbound {
   );
 }
 
+export function marketingErrorMessage(error: unknown): string {
+  const msg = error instanceof Error ? error.message : String(error);
+
+  if (msg.includes("GEMINI_NOT_CONFIGURED")) {
+    return "A Lia com IA ainda não está ligada 🤖\n\nPeça para configurar *GEMINI_API_KEY* no Railway.";
+  }
+  if (msg.includes("GEMINI_TIMEOUT")) {
+    return "Demorou mais que o esperado ⏳ Tenta de novo — às vezes a IA fica sobrecarregada.";
+  }
+  if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) {
+    return "Limite da IA atingido por agora 🙈 Espera uns minutinhos e tenta de novo.";
+  }
+  if (msg.includes("404") || msg.includes("NOT_FOUND")) {
+    return "Serviço de IA temporariamente indisponível. Tenta de novo em instantes.";
+  }
+  if (msg.includes("API_KEY_INVALID") || msg.includes("401") || msg.includes("403")) {
+    return "Chave da IA inválida 🔑 Peça para revisar *GEMINI_API_KEY* no Railway.";
+  }
+
+  return "Ops, não consegui gerar agora 😅 Tenta de novo em alguns segundos.";
+}
+
 export function isMarketingAction(actionId: string): boolean {
   return actionId.startsWith("lia_");
 }

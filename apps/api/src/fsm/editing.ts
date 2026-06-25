@@ -10,6 +10,7 @@ import { appendPhotoToChatState, MAX_GALLERY_PHOTOS } from "../lib/chat-photos.j
 import {
   buttonsMessage,
   listMessage,
+  sendWhatsAppText,
   textMessage,
   type WhatsAppOutbound,
 } from "../services/whatsapp-send.js";
@@ -19,6 +20,7 @@ import {
   geminiUnavailableMessage,
   isGeminiConfigured,
   isMarketingAction,
+  marketingErrorMessage,
   marketingKindFromAction,
   marketingMenuMessage,
   splitWhatsAppMessages,
@@ -109,6 +111,7 @@ const MARKETING_LABELS: Record<MarketingKind, string> = {
 };
 
 async function runMarketingAction(
+  recipient: string,
   phone: string,
   actionId: string,
   tenant: NonNullable<Awaited<ReturnType<typeof loadTenant>>>
@@ -127,6 +130,8 @@ async function runMarketingAction(
   }
 
   try {
+    await sendWhatsAppText(recipient, "⏳ Gerando seu texto com IA... só um instante!");
+
     const copy = await generateMarketingCopy(kind, tenant, config.rootDomain);
 
     if (kind === "tagline") {
@@ -154,7 +159,7 @@ async function runMarketingAction(
   } catch (error) {
     console.error("[Lia marketing]", error);
     return [
-      textMessage("Ops, não consegui gerar agora 😅 Tenta de novo em alguns segundos."),
+      textMessage(marketingErrorMessage(error)),
       editMenuMessage(slug),
     ];
   }
@@ -237,6 +242,7 @@ function productDeleteListMessage(
 }
 
 async function handleMenuAction(
+  recipient: string,
   phone: string,
   actionId: string,
   slug: string
@@ -244,7 +250,7 @@ async function handleMenuAction(
   if (isMarketingAction(actionId)) {
     const tenant = await loadTenant(phone);
     if (!tenant) return [textMessage("Site não encontrado.")];
-    return runMarketingAction(phone, actionId, tenant);
+    return runMarketingAction(recipient, phone, actionId, tenant);
   }
 
   switch (actionId) {
@@ -347,7 +353,7 @@ export async function handleEditingMessage(
 
   if (currentState === ChatStates.CONFIRMED || currentState === ChatStates.EDITING) {
     if (message.type === "interactive" && message.buttonId) {
-      const action = await handleMenuAction(phone, message.buttonId, slug);
+      const action = await handleMenuAction(message.from, phone, message.buttonId, slug);
       if (action) return action;
     }
     if (isDivulgarTrigger(message)) {
