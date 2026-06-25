@@ -15,6 +15,7 @@ import {
 } from "../services/whatsapp-send.js";
 import { config } from "../config.js";
 import {
+  buildMarketingReplies,
   generateMarketingCopy,
   geminiUnavailableMessage,
   isGeminiConfigured,
@@ -22,8 +23,6 @@ import {
   marketingErrorMessage,
   marketingKindFromAction,
   marketingMenuMessage,
-  splitWhatsAppMessages,
-  type MarketingKind,
 } from "../services/lia-marketing.js";
 import type { IncomingMessage } from "./types.js";
 
@@ -93,22 +92,13 @@ export function editMenuMessage(slug: string): WhatsAppOutbound {
           {
             id: "open_divulgar",
             title: "Divulgar com Lia",
-            description: "Status, Instagram, bio e mais",
+            description: "Post com foto, textos e gancho",
           },
         ],
       },
     ]
   );
 }
-
-const MARKETING_LABELS: Record<MarketingKind, string> = {
-  kit: "Kit de divulgação",
-  status: "Status WhatsApp",
-  instagram: "Legenda Instagram",
-  grupo: "Grupo de turismo",
-  bio: "Bio Instagram",
-  tagline: "Gancho do site",
-};
 
 async function runMarketingAction(
   phone: string,
@@ -146,19 +136,10 @@ async function runMarketingAction(
       ];
     }
 
-    const chunks = splitWhatsAppMessages(copy);
-    return [
-      textMessage(`✨ *${MARKETING_LABELS[kind]}* — copie e cole:\n`),
-      ...chunks.map((chunk) => textMessage(chunk)),
-      textMessage("Gostou? Envie *divulgar* para gerar outro texto."),
-      editMenuMessage(slug),
-    ];
+    return buildMarketingReplies(kind, tenant, config.rootDomain, copy);
   } catch (error) {
     console.error("[Lia marketing]", error);
-    return [
-      textMessage(marketingErrorMessage(error)),
-      editMenuMessage(slug),
-    ];
+    return [textMessage(marketingErrorMessage(error))];
   }
 }
 
@@ -216,7 +197,10 @@ async function loadTenant(phone: string) {
   if (!base) return null;
   return prisma.tenant.findUnique({
     where: { id: base.id },
-    include: { products: { orderBy: { createdAt: "desc" }, take: 20 } },
+    include: {
+      products: { orderBy: { createdAt: "desc" }, take: 20 },
+      photos: { orderBy: { createdAt: "asc" }, take: 10 },
+    },
   });
 }
 

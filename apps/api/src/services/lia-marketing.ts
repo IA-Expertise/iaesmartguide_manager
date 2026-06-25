@@ -1,29 +1,33 @@
-import type { Tenant, TenantProduct } from "@prisma/client";
+import type { Tenant, TenantPhoto, TenantProduct } from "@prisma/client";
 import { runGeminiPrompt, isGeminiConfigured } from "./gemini.js";
 import type { WhatsAppOutbound } from "./whatsapp-send.js";
-import { listMessage, textMessage } from "./whatsapp-send.js";
+import { imageMessage, listMessage, textMessage } from "./whatsapp-send.js";
 
-export type MarketingKind = "kit" | "status" | "instagram" | "grupo" | "bio" | "tagline";
+/** Três ferramentas: post com foto, texto versátil, gancho do site */
+export type MarketingKind = "post" | "share" | "tagline";
+
+const WHATSAPP_CAPTION_MAX = 1024;
 
 const LIA_SYSTEM = `Você é a Lia, assistente de marketing do IAE Smart Guide para turismo rural e gastronomia no Brasil.
 
 Tom de voz: informal e acolhedor, como uma amiga que manja de divulgação local — nunca corporativa.
-Emojis: use com moderação (no máximo 2 ou 3 por bloco de texto).
+Emojis: use com moderação (2 ou 3 por bloco).
 Idioma: português do Brasil.
 Regras:
-- Escreva textos curtos, prontos para copiar e colar no WhatsApp ou Instagram.
+- Entregue APENAS o texto final, pronto para copiar e colar.
+- NUNCA comece com "Aqui está", "Segue" ou explicações sobre o que você fez.
 - Não invente preços, produtos ou informações que não estejam no contexto.
-- Inclua o link do site quando fizer sentido.
-- Não use markdown complexo; WhatsApp aceita *negrito* com asteriscos.`;
+- WhatsApp aceita *negrito* com asteriscos.`;
 
-export interface TenantWithProducts extends Tenant {
+export interface TenantWithMedia extends Tenant {
   products: TenantProduct[];
+  photos: TenantPhoto[];
 }
 
-export function buildMarketingContext(tenant: TenantWithProducts, rootDomain: string) {
+export function buildMarketingContext(tenant: TenantWithMedia, rootDomain: string) {
   const siteUrl = `https://${tenant.slug}.${rootDomain}`;
   const latestProducts = tenant.products.slice(0, 5).map((p) => {
-    const price = p.price ? ` (${p.price})` : "";
+    const price = p.price ? ` — ${p.price}` : "";
     return `${p.title}${price}`;
   });
 
@@ -35,7 +39,9 @@ export function buildMarketingContext(tenant: TenantWithProducts, rootDomain: st
     address: tenant.address ?? "(não informado)",
     instagram: tenant.instagramUrl ?? "(não informado)",
     products:
-      latestProducts.length > 0 ? latestProducts.join("; ") : "(nenhum produto cadastrado)",
+      latestProducts.length > 0 ? latestProducts.join("\n") : "(nenhuma oferta cadastrada)",
+    hasPhotos: tenant.photos.length > 0,
+    hasLogo: Boolean(tenant.logoUrl),
   };
 }
 
@@ -49,58 +55,84 @@ Gancho atual: ${ctx.tagline}
 Sobre: ${ctx.description}
 Endereço: ${ctx.address}
 Instagram: ${ctx.instagram}
-Ofertas recentes: ${ctx.products}`;
+Ofertas:
+${ctx.products}`;
 
   switch (kind) {
-    case "status":
+    case "post":
       return `${base}
 
-Crie UM texto para Status do WhatsApp (máx. 280 caracteres) anunciando o lugar ou a oferta mais recente. Termine com o link do site.`;
-    case "instagram":
+Crie a LEGENDA de um post para WhatsApp/Instagram anunciando o lugar, neste formato:
+1. Título chamativo com emoji (use *negrito*)
+2. Uma ou duas frases convidando para visitar no fim de semana
+3. Se houver ofertas no contexto, liste até 3 com emoji, *nome* e preço
+4. CTA final com o link ${ctx.siteUrl}
+
+Máximo 900 caracteres. Apenas a legenda, sem aspas.`;
+    case "share":
       return `${base}
 
-Crie UMA legenda para post no Instagram (máx. 400 caracteres) com gancho emocional, CTA e 4 a 6 hashtags locais/turismo no final.`;
-    case "grupo":
-      return `${base}
-
-Crie UM texto para grupo de WhatsApp de turismo/ciclismo (máx. 350 caracteres) como dica de parada no fim de semana — tom de recomendação entre amigos.`;
-    case "bio":
-      return `${base}
-
-Crie UM texto curto para bio do Instagram (máx. 150 caracteres) com o essencial e o link ${ctx.siteUrl}.`;
+Crie UM texto curto para Status do WhatsApp ou grupos de turismo/ciclismo.
+Tom de dica entre amigos recomendando uma parada. Máximo 380 caracteres.
+Termine com o link ${ctx.siteUrl}. Apenas o texto.`;
     case "tagline":
       return `${base}
 
-Crie UM gancho de atração (máx. 120 caracteres) para o topo do site — deve fazer o turista querer desviar a rota. Apenas o texto do gancho, sem aspas.`;
-    case "kit":
-      return `${base}
-
-Monte um KIT DE DIVULGAÇÃO com 4 blocos separados por linha em branco, nesta ordem, com título em negrito WhatsApp (*título*):
-
-*1. Status WhatsApp*
-(texto)
-
-*2. Grupo de turismo*
-(texto)
-
-*3. Legenda Instagram*
-(texto)
-
-*4. Bio Instagram*
-(texto)`;
+Crie UM gancho de atração (máx. 120 caracteres) para o topo do site — deve fazer o turista querer desviar a rota. Apenas o texto, sem aspas.`;
   }
+}
+
+function geminiOptionsForKind(kind: MarketingKind) {
+  switch (kind) {
+    case "post":
+      return { maxOutputTokens: 1536 };
+    case "share":
+      return { maxOutputTokens: 512 };
+    case "tagline":
+      return { maxOutputTokens: 128 };
+  }
+}
+
+export function cleanMarketingCopy(text: string): string {
+  return text
+    .replace(/^(aqui está[^\n]*\n+)/i, "")
+    .replace(/^(segue[^\n]*\n+)/i, "")
+    .replace(/^["']|["']$/g, "")
+    .trim();
 }
 
 export async function generateMarketingCopy(
   kind: MarketingKind,
-  tenant: TenantWithProducts,
+  tenant: TenantWithMedia,
   rootDomain: string
 ): Promise<string> {
   const ctx = buildMarketingContext(tenant, rootDomain);
-  return runGeminiPrompt(LIA_SYSTEM, promptForKind(kind, ctx));
+  const raw = await runGeminiPrompt(
+    LIA_SYSTEM,
+    promptForKind(kind, ctx),
+    geminiOptionsForKind(kind)
+  );
+  return cleanMarketingCopy(raw);
 }
 
-export function splitWhatsAppMessages(text: string, maxLen = 3800): string[] {
+export function pickPostImageUrl(tenant: TenantWithMedia): string | null {
+  const gallery = tenant.photos
+    .map((photo) => photo.photoUrl)
+    .find((url) => url.startsWith("http"));
+  if (gallery) return gallery;
+
+  if (tenant.logoUrl?.startsWith("http")) return tenant.logoUrl;
+  return null;
+}
+
+export function captionForWhatsApp(caption: string): string {
+  if (caption.length <= WHATSAPP_CAPTION_MAX) return caption;
+  const cut = caption.lastIndexOf("\n", WHATSAPP_CAPTION_MAX - 20);
+  const at = cut > WHATSAPP_CAPTION_MAX * 0.5 ? cut : WHATSAPP_CAPTION_MAX - 20;
+  return `${caption.slice(0, at).trim()}…`;
+}
+
+export function splitWhatsAppMessages(text: string, maxLen = 3500): string[] {
   if (text.length <= maxLen) return [text];
 
   const parts: string[] = [];
@@ -108,6 +140,9 @@ export function splitWhatsAppMessages(text: string, maxLen = 3800): string[] {
 
   while (remaining.length > maxLen) {
     let cut = remaining.lastIndexOf("\n\n", maxLen);
+    if (cut < maxLen * 0.4) {
+      cut = remaining.lastIndexOf("\n", maxLen);
+    }
     if (cut < maxLen * 0.4) cut = maxLen;
     parts.push(remaining.slice(0, cut).trim());
     remaining = remaining.slice(cut).trim();
@@ -119,18 +154,27 @@ export function splitWhatsAppMessages(text: string, maxLen = 3800): string[] {
 
 export function marketingMenuMessage(): WhatsAppOutbound {
   return listMessage(
-    "Bora divulgar? Eu monto o texto com IA — é só copiar e colar 📣",
+    "Bora divulgar? Escolha uma ferramenta — eu monto com IA 📣",
     "Ver opções",
     [
       {
         title: "Divulgar com Lia",
         rows: [
-          { id: "lia_kit", title: "Kit completo", description: "Status, grupo, Insta e bio" },
-          { id: "lia_status", title: "Status WhatsApp", description: "Texto pro Status" },
-          { id: "lia_instagram", title: "Legenda Instagram", description: "Post com hashtags" },
-          { id: "lia_grupo", title: "Grupo de turismo", description: "Dica de parada" },
-          { id: "lia_bio", title: "Bio Instagram", description: "Texto curto + link" },
-          { id: "lia_tagline", title: "Gancho do site", description: "Frase de impacto" },
+          {
+            id: "lia_post",
+            title: "Post com foto",
+            description: "Imagem do site + legenda + link",
+          },
+          {
+            id: "lia_share",
+            title: "Texto pra compartilhar",
+            description: "Status, grupos e WhatsApp",
+          },
+          {
+            id: "lia_tagline",
+            title: "Gancho do site",
+            description: "Frase de impacto no topo",
+          },
         ],
       },
     ]
@@ -171,14 +215,56 @@ export function isMarketingAction(actionId: string): boolean {
 
 export function marketingKindFromAction(actionId: string): MarketingKind | null {
   const map: Record<string, MarketingKind> = {
-    lia_kit: "kit",
-    lia_status: "status",
-    lia_instagram: "instagram",
-    lia_grupo: "grupo",
-    lia_bio: "bio",
+    lia_post: "post",
+    lia_share: "share",
     lia_tagline: "tagline",
+    // compatibilidade com menu antigo
+    lia_kit: "share",
+    lia_status: "share",
+    lia_instagram: "post",
+    lia_grupo: "share",
+    lia_bio: "share",
   };
   return map[actionId] ?? null;
+}
+
+export function buildMarketingReplies(
+  kind: MarketingKind,
+  tenant: TenantWithMedia,
+  rootDomain: string,
+  copy: string
+): WhatsAppOutbound[] {
+  if (kind === "post") {
+    const imageUrl = pickPostImageUrl(tenant);
+    if (!imageUrl) {
+      return [
+        textMessage(
+          "Para montar o *post com foto*, cadastre imagens no menu:\n*Imagens → Fotos*\n\nPor enquanto, use *Texto pra compartilhar*."
+        ),
+      ];
+    }
+
+    const caption = captionForWhatsApp(copy);
+    const siteUrl = `https://${tenant.slug}.${rootDomain}`;
+    return [
+      textMessage(
+        `✨ *Post pronto!* Encaminhe a imagem abaixo pros grupos e redes.\n\n📎 Site: ${siteUrl}`
+      ),
+      imageMessage(imageUrl, caption),
+      textMessage("Gostou? Envie *divulgar* para gerar outro."),
+    ];
+  }
+
+  if (kind === "tagline") {
+    return [textMessage(`✨ *Sugestão de gancho:*\n\n${copy}`)];
+  }
+
+  const chunks = splitWhatsAppMessages(copy);
+  return [
+    textMessage("✨ *Texto pra compartilhar* — copie e cole:"),
+    ...chunks.map((chunk) => textMessage(chunk)),
+    textMessage("Gostou? Envie *divulgar* para gerar outro."),
+  ];
 }
 
 export { isGeminiConfigured };

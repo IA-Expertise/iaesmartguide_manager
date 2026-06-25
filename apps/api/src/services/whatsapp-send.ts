@@ -15,6 +15,7 @@ export interface ListSection {
 
 export type WhatsAppOutbound =
   | { type: "text"; body: string }
+  | { type: "image"; imageUrl: string; caption?: string }
   | { type: "buttons"; body: string; buttons: Array<{ id: string; title: string }> }
   | { type: "list"; body: string; buttonLabel: string; sections: ListSection[] };
 
@@ -24,6 +25,10 @@ export function isWhatsAppConfigured(): boolean {
 
 export function textMessage(body: string): WhatsAppOutbound {
   return { type: "text", body };
+}
+
+export function imageMessage(imageUrl: string, caption?: string): WhatsAppOutbound {
+  return { type: "image", imageUrl, caption };
 }
 
 export function buttonsMessage(
@@ -76,6 +81,18 @@ async function sendPayload(to: string, message: Record<string, unknown>): Promis
 
 export async function sendWhatsAppText(to: string, body: string): Promise<void> {
   await sendPayload(to, { type: "text", text: { body } });
+}
+
+export async function sendWhatsAppImageLink(
+  to: string,
+  imageUrl: string,
+  caption?: string
+): Promise<void> {
+  const image: Record<string, string> = { link: imageUrl };
+  if (caption?.trim()) {
+    image.caption = caption.trim().slice(0, 1024);
+  }
+  await sendPayload(to, { type: "image", image });
 }
 
 export async function sendWhatsAppButtons(
@@ -156,6 +173,8 @@ export async function deliverOutbound(to: string, messages: WhatsAppOutbound[]):
     try {
       if (message.type === "text") {
         await sendWhatsAppText(to, message.body);
+      } else if (message.type === "image") {
+        await sendWhatsAppImageLink(to, message.imageUrl, message.caption);
       } else if (message.type === "buttons") {
         await sendWhatsAppButtons(to, message.body, message.buttons);
       } else {
