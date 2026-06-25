@@ -85,7 +85,7 @@ Escolher uma estratégia (ver seção 7 deste doc):
 - [ ] Vercel: root `apps/web`, build monorepo
 - [ ] R2: bucket + `R2_PUBLIC_URL`
 - [ ] `GEMINI_API_KEY` (se usar marketing IA)
-- [ ] Webhook: Replit ou direto na Railway (`docs/prompt-replit-webhook-forward.md`)
+- [ ] Webhook: direto na Railway (§8) ou proxy Replit (`docs/prompt-replit-webhook-forward.md`)
 
 ### 4.4 Schema Prisma
 
@@ -213,7 +213,88 @@ Publicar como workspace interno ou npm privado. **Ainda não feito** — este do
 
 ---
 
-## 8. Variáveis de ambiente (referência)
+## 8. Estratégia Meta — WABA e app por projeto
+
+Hoje o **IAE Smart Guide** compartilha a WABA *Agente IAE* com prefeituras/turismo. O Replit recebe o webhook da Meta e **roteia por `phone_number_id`** para a Railway (ver `docs/prompt-replit-webhook-forward.md`).
+
+Para **novos projetos derivados do motor**, a recomendação é **WABA + app Meta dedicados** por linha de produto.
+
+### 8.1 Três cenários
+
+| Cenário | Descrição | Quando usar |
+|---------|-----------|-------------|
+| **A — Mesma WABA, vários números** | Um webhook central (ex.: Replit) roteia por `phone_number_id` | Variações do *mesmo* produto; setup rápido |
+| **B — WABA + app novos** | Conta WhatsApp e app Meta exclusivos por produto | **Recomendado** para novos nichos/marcas |
+| **C — App novo, WABA compartilhada** | Raro na Cloud API; Meta costuma amarrar 1 app ↔ 1 WABA | Evitar como padrão |
+
+### 8.2 Por que WABA dedicada nos projetos novos
+
+| Vantagem | Detalhe |
+|----------|---------|
+| **Isolamento** | Limite, bloqueio ou problema de qualidade não afeta prefeituras nem outros produtos |
+| **Webhook simples** | POST direto na Railway — sem proxy Replit |
+| **Marca clara** | Número e nome da assistente pertencem ao produto (não “IAE genérico”) |
+| **Venda / spin-off** | Produto pode mudar de dono com pacote Meta próprio |
+| **Alinha com o template** | 1 repo template → 1 deploy Railway → 1 par WABA/app |
+
+### 8.3 O que manter separado
+
+| Produto | WABA / app | Webhook |
+|---------|------------|---------|
+| Prefeituras / turismo (Replit atual) | WABA IAE existente | Replit (sem mudar) |
+| IAE Smart Guide (piloto) | Pode ficar na WABA atual ou migrar depois | Replit → Railway |
+| **Novo projeto do motor** | **WABA + app novos** | **Direto na Railway** |
+
+### 8.4 Arquitetura alvo (projeto novo)
+
+```
+Meta App "Produto X"
+    └── WABA "Produto X"
+            └── Número da assistente (+55 …)
+                    └── Webhook GET/POST → https://api-produto-x.railway.app/webhooks/whatsapp
+                            └── FSM + Graph API (respostas)
+```
+
+O **código** é o mesmo (template do repo). Mudam: secrets, domínio, persona do bot, `PHONE_NUMBER_ID`, token permanente.
+
+### 8.5 Checklist Meta por projeto novo
+
+1. **Meta Business Manager** (pode ser o mesmo portfólio empresarial IAE)
+2. Criar **app Meta** (tipo Business) → adicionar produto **WhatsApp**
+3. Criar ou vincular **WABA** dedicada
+4. Adicionar **número** (novo ou migrar existente)
+5. Gerar **token permanente** do System User (com permissões `whatsapp_business_messaging`, etc.)
+6. Configurar **webhook**:
+   - URL: `https://<api>/webhooks/whatsapp`
+   - Verify token: valor de `VERIFY_TOKEN` na Railway
+   - Campos: `messages` (mínimo)
+7. Anotar na Railway:
+   - `WHATSAPP_TOKEN`
+   - `PHONE_NUMBER_ID`
+   - `WABA_ID` (referência; opcional no código)
+   - `VERIFY_TOKEN`
+8. **Não** definir `WHATSAPP_FORWARD_SECRET` se webhook for direto (proxy Replit desligado)
+9. Testar: `GET /api/admin/whatsapp-check?secret=SEED_SECRET`
+10. Template de mensagens / opt-in — necessário só se for **mensagem proativa** (lembretes, campanhas)
+
+### 8.6 Um deploy ou multi-tenant na API?
+
+| Modelo | Descrição | Quando |
+|--------|-----------|--------|
+| **1 Railway por produto** | Um `.env` por WABA/número | Piloto, white-label, até ~5 produtos |
+| **1 API, N WABAs** | Vários `PHONE_NUMBER_ID` + roteamento no webhook | Muitos clientes, mesmo código e DB |
+
+Para os primeiros derivados do motor, **1 deploy por produto** simplifica operação e debug.
+
+### 8.7 Custo e operação (referência)
+
+- Número WhatsApp Cloud API: cobrança Meta por conversa + número (ver preço atual na Meta)
+- Cada WABA nova: processo de verificação business (pode reutilizar BM já aprovado)
+- Token expira se System User/permissões mudarem — documentar no runbook do projeto
+
+---
+
+## 9. Variáveis de ambiente (referência)
 
 Ver `.env.example`. Mínimo produção:
 
@@ -227,7 +308,7 @@ Ver `.env.example`. Mínimo produção:
 
 ---
 
-## 9. Roadmap do motor (fora do piloto atual)
+## 10. Roadmap do motor (fora do piloto atual)
 
 Itens discutidos mas **não implementados** — candidatos ao playbook v2:
 
@@ -242,19 +323,18 @@ Itens discutidos mas **não implementados** — candidatos ao playbook v2:
 
 ---
 
-## 10. Histórico de lições (adicionar após pilotos)
+## 11. Histórico de lições (adicionar após pilotos)
 
 _Use esta seção para anotar feedback dos 3 amigos e de produção._
 
 | Data | Projeto | Lição |
 |------|---------|-------|
 | 2026-06 | IAE Smart Guide | Listas WhatsApp: máx. 10 linhas |
-| 2026-06 | IAE Smart Guide | Marketing: foto + assunto antes da IA |
-| | | |
+| 2026-06 | IAE Smart Guide | Novos projetos: WABA + app Meta dedicados (§8) |
 
 ---
 
-## 11. Referências internas
+## 12. Referências internas
 
 - `docs/prompt-replit-webhook-forward.md` — proxy webhook Meta → Railway
 - `docs/Ajustes Estruturais para Páginas Satélites (Mobile-First).pdf` — layout web
