@@ -40,12 +40,10 @@ export function PhotoGallery({ photos, businessName }: PhotoGalleryProps) {
 
   return (
     <>
-      <div className={styles.photoGrid}>
+      <p className={styles.scrollHint}>Deslize para ver as fotos · toque para ampliar</p>
+      <div className={styles.photoStrip}>
         {photos.map((url, i) => (
-          <figure
-            key={url}
-            className={`${styles.photoFrame} ${i === 0 ? styles.photoFeatured : ""}`}
-          >
+          <figure key={url} className={styles.photoFrame}>
             <button
               type="button"
               className={styles.photoButton}

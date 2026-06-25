@@ -185,25 +185,47 @@
   color: var(--accent-dark);
 }
 
-/* —— Gallery —— */
-.photoGrid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.65rem;
+/* —— Gallery (horizontal strip) —— */
+.scrollHint {
+  margin: 0 0 0.65rem;
+  font-size: 0.78rem;
+  color: #78716c;
 }
 
-@media (min-width: 540px) {
-  .photoGrid {
-    grid-template-columns: repeat(3, 1fr);
-  }
+.photoStrip {
+  display: flex;
+  gap: 0.65rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.35rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-muted) transparent;
+}
+
+.photoStrip::-webkit-scrollbar {
+  height: 5px;
+}
+
+.photoStrip::-webkit-scrollbar-thumb {
+  background: var(--accent-muted);
+  border-radius: 999px;
 }
 
 .photoFrame {
+  flex: 0 0 auto;
+  width: min(72vw, 240px);
+  height: 220px;
   margin: 0;
   overflow: hidden;
   border-radius: 14px;
   background: var(--accent-muted);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  scroll-snap-align: start;
+}
+
+.photoFrame:first-child {
+  width: min(78vw, 280px);
 }
 
 .photoButton {
@@ -216,23 +238,10 @@
   cursor: zoom-in;
 }
 
-.photoFeatured {
-  grid-column: span 2;
-  grid-row: span 1;
-}
-
-@media (min-width: 540px) {
-  .photoFeatured {
-    grid-column: span 2;
-    grid-row: span 2;
-  }
-}
-
 .photo {
   display: block;
   width: 100%;
   height: 100%;
-  min-height: 140px;
   object-fit: cover;
   transition: transform 0.35s ease;
 }
@@ -360,8 +369,35 @@
   padding: 0;
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 0.85rem;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+@media (min-width: 540px) {
+  .productGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.expandButton {
+  display: block;
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--accent-dark);
+  background: var(--accent-light);
+  border: 1px solid var(--accent-muted);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.expandButton:hover {
+  background: var(--accent-muted);
+  transform: translateY(-1px);
 }
 
 .productCard {

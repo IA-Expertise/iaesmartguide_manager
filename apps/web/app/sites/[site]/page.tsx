@@ -4,6 +4,7 @@ import { fetchTenant } from "@/lib/api";
 import { themeFromSlug, themeToCssVars, youtubeEmbedId } from "@/lib/theme";
 import { IconBag, IconGallery, IconMapPin, IconPlay, IconSpark } from "./icons";
 import { PhotoGallery } from "./photo-gallery";
+import { ProductList } from "./product-list";
 import styles from "./site.module.css";
 
 interface PageProps {
@@ -84,26 +85,7 @@ export default async function TenantSitePage({ params }: PageProps) {
               </span>
               <h2 id="products-heading">Produtos e ofertas</h2>
             </div>
-            <ul className={styles.productGrid}>
-              {tenant.products.map((product) => (
-                <li key={product.id} className={styles.productCard}>
-                  <div className={styles.productMedia}>
-                    {product.imageUrl ? (
-                      <img src={product.imageUrl} alt={product.title} className={styles.productImage} />
-                    ) : (
-                      <div className={styles.productImageFallback}>
-                        <IconBag size={28} />
-                      </div>
-                    )}
-                    {product.price && <span className={styles.priceBadge}>{product.price}</span>}
-                  </div>
-                  <div className={styles.productBody}>
-                    <strong className={styles.productTitle}>{product.title}</strong>
-                    {!product.price && <span className={styles.priceInline}>Consulte</span>}
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <ProductList products={tenant.products} />
           </section>
         )}
 
