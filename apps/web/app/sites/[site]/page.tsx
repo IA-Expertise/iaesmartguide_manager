@@ -55,8 +55,10 @@ export default async function TenantSitePage({ params }: PageProps) {
           </div>
         )}
         <div className={styles.heroContent}>
-          <h1 className={styles.title}>{tenant.businessName}</h1>
           {heroTagline && <p className={styles.tagline}>{heroTagline}</p>}
+          <h1 className={tenant.logoUrl ? styles.titleCompact : styles.title}>
+            {tenant.businessName}
+          </h1>
         </div>
       </header>
 

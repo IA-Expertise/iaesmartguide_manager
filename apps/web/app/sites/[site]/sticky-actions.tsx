@@ -1,4 +1,4 @@
-import { googleMapsDirectionsUrl, whatsAppContactUrl, wazeNavigateUrl } from "@/lib/links";
+import { googleMapsDirectionsUrl, whatsAppContactUrl } from "@/lib/links";
 import { IconMapPin, IconWhatsApp } from "./icons";
 import styles from "./site.module.css";
 
@@ -15,32 +15,24 @@ export function StickyActions({ businessName, address, whatsappNumber }: StickyA
   if (!hasRoute && !hasWhatsApp) return null;
 
   const waMessage = `Olá! Vi o site da ${businessName} e gostaria de mais informações.`;
+  const singleAction = (hasRoute && !hasWhatsApp) || (!hasRoute && hasWhatsApp);
 
   return (
-    <div className={styles.stickyBar} role="navigation" aria-label="Ações rápidas">
+    <div
+      className={`${styles.stickyBar}${singleAction ? ` ${styles.stickyBarSingle}` : ""}`}
+      role="navigation"
+      aria-label="Ações rápidas"
+    >
       {hasRoute && (
-        <div className={styles.stickyRouteGroup}>
-          <a
-            href={googleMapsDirectionsUrl(address!)}
-            className={`${styles.stickyBtn} ${styles.stickyBtnMaps}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <IconMapPin size={18} />
-            <span>Maps</span>
-          </a>
-          <a
-            href={wazeNavigateUrl(address!)}
-            className={`${styles.stickyBtn} ${styles.stickyBtnWaze}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <span className={styles.wazeMark} aria-hidden>
-              W
-            </span>
-            <span>Waze</span>
-          </a>
-        </div>
+        <a
+          href={googleMapsDirectionsUrl(address!)}
+          className={`${styles.stickyBtn} ${styles.stickyBtnRoute}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <IconMapPin size={18} />
+          <span>Como chegar</span>
+        </a>
       )}
       {hasWhatsApp && (
         <a
@@ -49,7 +41,7 @@ export function StickyActions({ businessName, address, whatsappNumber }: StickyA
           target="_blank"
           rel="noopener noreferrer"
         >
-          <IconWhatsApp size={20} />
+          <IconWhatsApp size={18} />
           <span>WhatsApp</span>
         </a>
       )}
