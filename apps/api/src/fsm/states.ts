@@ -17,6 +17,7 @@ export const ChatStates = {
   EDITING_DELETE_PRODUCT_CONFIRM: "EDITING_DELETE_PRODUCT_CONFIRM",
   EDITING_YOUTUBE: "EDITING_YOUTUBE",
   EDITING_INSTAGRAM: "EDITING_INSTAGRAM",
+  MARKETING_TAGLINE_CONFIRM: "MARKETING_TAGLINE_CONFIRM",
   /** @deprecated use EDITING_* states */
   EDITING: "EDITING",
 } as const;
@@ -35,4 +36,5 @@ export interface TempData {
   productPrice?: string | null;
   productImageUrl?: string;
   productIdToDelete?: number;
+  suggestedTagline?: string;
 }

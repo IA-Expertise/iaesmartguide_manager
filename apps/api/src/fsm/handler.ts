@@ -266,6 +266,11 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<W
       });
 
       replies.push(textMessage(`Seu site está pronto! Acesse: https://${slug}.${domain}`));
+      replies.push(
+        textMessage(
+          "Dica da Lia: envie *divulgar* que eu monto textos pra Status, Instagram e grupos com IA ✨"
+        )
+      );
       replies.push(editMenuMessage(slug));
       break;
     }

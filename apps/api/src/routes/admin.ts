@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { isR2Configured, uploadToR2 } from "../services/r2.js";
+import { isGeminiConfigured } from "../services/gemini.js";
 import { isWhatsAppConfigured, sendWhatsAppText } from "../services/whatsapp-send.js";
 import { runDbPush } from "../lib/db-setup.js";
 import { runSeed } from "../lib/seed.js";
@@ -86,6 +87,7 @@ adminRouter.get("/whatsapp-check", (req, res) => {
     tokenConfigured: Boolean(config.whatsapp.token),
     forwardSecretConfigured: proxyMode,
     requirePayment: config.whatsapp.requirePayment,
+    geminiConfigured: isGeminiConfigured(),
     message: isWhatsAppConfigured()
       ? proxyMode
         ? "Railway pronta. Replit deve encaminhar POSTs com header X-Webhook-Forward-Secret."

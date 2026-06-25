@@ -14,7 +14,19 @@ import {
   type WhatsAppOutbound,
 } from "../services/whatsapp-send.js";
 import { config } from "../config.js";
+import {
+  generateMarketingCopy,
+  geminiUnavailableMessage,
+  isGeminiConfigured,
+  isMarketingAction,
+  marketingKindFromAction,
+  marketingMenuMessage,
+  splitWhatsAppMessages,
+  type MarketingKind,
+} from "../services/lia-marketing.js";
 import type { IncomingMessage } from "./types.js";
+
+const APPLY_TAGLINE = [{ id: "apply_tagline", title: "Usar no site" }];
 
 const ADVANCE_PHOTOS = [{ id: "advance_photos", title: "Avançar" }];
 const SKIP_YOUTUBE = [{ id: "skip_youtube", title: "Pular" }];
@@ -38,6 +50,7 @@ const EDIT_STATES = new Set<string>([
   ChatStates.EDITING_DELETE_PRODUCT_CONFIRM,
   ChatStates.EDITING_YOUTUBE,
   ChatStates.EDITING_INSTAGRAM,
+  ChatStates.MARKETING_TAGLINE_CONFIRM,
 ]);
 
 export function isEditingState(state: string): boolean {
@@ -73,8 +86,78 @@ export function editMenuMessage(slug: string): WhatsAppOutbound {
           { id: "delete_product", title: "Excluir oferta", description: "Remover do site" },
         ],
       },
+      {
+        title: "Divulgar",
+        rows: [
+          { id: "lia_kit", title: "Kit completo", description: "Status, grupo, Insta e bio" },
+          { id: "lia_status", title: "Status WhatsApp", description: "Texto pro Status" },
+          { id: "lia_instagram", title: "Legenda Instagram", description: "Post com hashtags" },
+          { id: "open_divulgar", title: "Mais opções", description: "Grupo, bio, gancho..." },
+        ],
+      },
     ]
   );
+}
+
+const MARKETING_LABELS: Record<MarketingKind, string> = {
+  kit: "Kit de divulgação",
+  status: "Status WhatsApp",
+  instagram: "Legenda Instagram",
+  grupo: "Grupo de turismo",
+  bio: "Bio Instagram",
+  tagline: "Gancho do site",
+};
+
+async function runMarketingAction(
+  phone: string,
+  actionId: string,
+  tenant: NonNullable<Awaited<ReturnType<typeof loadTenant>>>
+): Promise<WhatsAppOutbound[]> {
+  const slug = tenant.slug;
+  const kind = marketingKindFromAction(actionId);
+
+  if (actionId === "open_divulgar") {
+    return [marketingMenuMessage()];
+  }
+
+  if (!kind) return [textMessage("Opção inválida."), editMenuMessage(slug)];
+
+  if (!isGeminiConfigured()) {
+    return [geminiUnavailableMessage(), editMenuMessage(slug)];
+  }
+
+  try {
+    const copy = await generateMarketingCopy(kind, tenant, config.rootDomain);
+
+    if (kind === "tagline") {
+      const line = copy.replace(/^["']|["']$/g, "").trim();
+      await prisma.chatState.update({
+        where: { whatsappNumber: phone },
+        data: {
+          currentState: ChatStates.MARKETING_TAGLINE_CONFIRM,
+          tempData: { suggestedTagline: line },
+        },
+      });
+      return [
+        textMessage(`✨ *Sugestão de gancho:*\n\n${line}`),
+        buttonsMessage("Quer colocar isso no topo do site?", [...APPLY_TAGLINE, ...CANCEL_EDIT]),
+      ];
+    }
+
+    const chunks = splitWhatsAppMessages(copy);
+    return [
+      textMessage(`✨ *${MARKETING_LABELS[kind]}* — copie e cole:\n`),
+      ...chunks.map((chunk) => textMessage(chunk)),
+      textMessage("Gostou? Envie *divulgar* para gerar outro texto."),
+      editMenuMessage(slug),
+    ];
+  } catch (error) {
+    console.error("[Lia marketing]", error);
+    return [
+      textMessage("Ops, não consegui gerar agora 😅 Tenta de novo em alguns segundos."),
+      editMenuMessage(slug),
+    ];
+  }
 }
 
 async function finishEdit(
@@ -109,7 +192,20 @@ function menuTrigger(message: IncomingMessage): boolean {
   if (message.type === "interactive") return false;
   if (message.type !== "text") return true;
   const t = message.text?.trim().toLowerCase() ?? "";
-  return t === "" || t === "menu" || t === "oi" || t === "olá" || t === "ola" || t === "ajuda";
+  return (
+    t === "" ||
+    t === "menu" ||
+    t === "oi" ||
+    t === "olá" ||
+    t === "ola" ||
+    t === "ajuda"
+  );
+}
+
+function isDivulgarTrigger(message: IncomingMessage): boolean {
+  if (message.type !== "text") return false;
+  const t = message.text?.trim().toLowerCase() ?? "";
+  return t === "divulgar" || t === "marketing";
 }
 
 async function loadTenant(phone: string) {
@@ -145,6 +241,12 @@ async function handleMenuAction(
   actionId: string,
   slug: string
 ): Promise<WhatsAppOutbound[] | null> {
+  if (isMarketingAction(actionId)) {
+    const tenant = await loadTenant(phone);
+    if (!tenant) return [textMessage("Site não encontrado.")];
+    return runMarketingAction(phone, actionId, tenant);
+  }
+
   switch (actionId) {
     case "edit_desc":
       await prisma.chatState.update({
@@ -247,6 +349,9 @@ export async function handleEditingMessage(
     if (message.type === "interactive" && message.buttonId) {
       const action = await handleMenuAction(phone, message.buttonId, slug);
       if (action) return action;
+    }
+    if (isDivulgarTrigger(message)) {
+      return [marketingMenuMessage()];
     }
     if (menuTrigger(message)) {
       return [editMenuMessage(slug)];
@@ -534,6 +639,23 @@ export async function handleEditingMessage(
         data: { instagramUrl },
       });
       return finishEdit(phone, slug, "Instagram atualizado!");
+    }
+
+    case ChatStates.MARKETING_TAGLINE_CONFIRM: {
+      if (message.type === "interactive" && message.buttonId === "apply_tagline") {
+        const line = tempData.suggestedTagline?.trim();
+        if (!line) return cancelEdit(phone, slug);
+        await prisma.tenant.update({
+          where: { id: tenant.id },
+          data: { tagline: line },
+        });
+        return finishEdit(phone, slug, "Gancho publicado no site! 🎉");
+      }
+      await prisma.chatState.update({
+        where: { whatsappNumber: phone },
+        data: { currentState: ChatStates.CONFIRMED, tempData: {} },
+      });
+      return [textMessage("Beleza! O texto ficou só com você."), editMenuMessage(slug)];
     }
 
     default:
