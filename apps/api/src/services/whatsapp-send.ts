@@ -38,6 +38,10 @@ export function listMessage(
   buttonLabel: string,
   sections: ListSection[]
 ): WhatsAppOutbound {
+  const totalRows = sections.reduce((count, section) => count + section.rows.length, 0);
+  if (totalRows > 10) {
+    console.error(`[WhatsApp] lista com ${totalRows} linhas (máx. 10) — mensagem rejeitada`);
+  }
   return { type: "list", body, buttonLabel, sections };
 }
 
@@ -103,6 +107,30 @@ export async function sendWhatsAppList(
   buttonLabel: string,
   sections: ListSection[]
 ): Promise<void> {
+  const normalized = sections.map((section) => ({
+    title: section.title.slice(0, 24),
+    rows: section.rows.map((row) => ({
+      id: row.id,
+      title: row.title.slice(0, 24),
+      description: row.description?.slice(0, 72),
+    })),
+  }));
+
+  const limited: ListSection[] = [];
+  let rowCount = 0;
+  for (const section of normalized) {
+    if (rowCount >= 10) break;
+    const rows = section.rows.slice(0, 10 - rowCount);
+    if (rows.length > 0) {
+      limited.push({ title: section.title, rows });
+      rowCount += rows.length;
+    }
+  }
+
+  if (rowCount < normalized.reduce((count, section) => count + section.rows.length, 0)) {
+    console.warn(`[WhatsApp] lista truncada para ${rowCount} linhas (máx. 10)`);
+  }
+
   await sendPayload(to, {
     type: "interactive",
     interactive: {
@@ -110,14 +138,7 @@ export async function sendWhatsAppList(
       body: { text: body },
       action: {
         button: buttonLabel.slice(0, 20),
-        sections: sections.map((section) => ({
-          title: section.title.slice(0, 24),
-          rows: section.rows.slice(0, 10).map((row) => ({
-            id: row.id,
-            title: row.title.slice(0, 24),
-            description: row.description?.slice(0, 72),
-          })),
-        })),
+        sections: limited,
       },
     },
   });

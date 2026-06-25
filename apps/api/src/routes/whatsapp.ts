@@ -5,7 +5,6 @@ import { handleWhatsAppMessage } from "../fsm/handler.js";
 import {
   deliverOutbound,
   sendWhatsAppText,
-  textMessage,
 } from "../services/whatsapp-send.js";
 import {
   isGeminiConfigured,
@@ -128,29 +127,44 @@ whatsappRouter.post("/", async (req, res) => {
     }
 
     await enqueueForPhone(canonical, async () => {
+      let replies: Awaited<ReturnType<typeof handleWhatsAppMessage>> = [];
+
       try {
         if (isMarketingGenerateAction(incoming) && isGeminiConfigured()) {
           await sendWhatsAppText(from, "⏳ Gerando seu texto com IA... só um instante!");
         }
 
-        const replies = await withHandlerTimeout(
+        replies = await withHandlerTimeout(
           () => handleWhatsAppMessage(incoming),
           HANDLER_TIMEOUT_MS
         );
-
-        if (replies.length) {
-          await deliverOutbound(from, replies);
-        }
       } catch (error) {
         console.error("[WhatsApp handler]", error);
+        const body =
+          error instanceof Error && error.message === "HANDLER_TIMEOUT"
+            ? "Demorei demais pra gerar o texto ⏳ Tenta de novo — se persistir, envie *menu*."
+            : "Algo deu errado por aqui 😅 Envie *menu* para tentar de novo.";
         try {
-          const body =
-            error instanceof Error && error.message === "HANDLER_TIMEOUT"
-              ? "Demorei demais pra gerar o texto ⏳ Tenta de novo — se persistir, envie *menu*."
-              : "Algo deu errado por aqui 😅 Envie *menu* para tentar de novo.";
-          await deliverOutbound(from, [textMessage(body)]);
+          await sendWhatsAppText(from, body);
         } catch (sendError) {
           console.error("[WhatsApp] falha ao enviar mensagem de erro", sendError);
+        }
+        return;
+      }
+
+      if (!replies.length) return;
+
+      try {
+        await deliverOutbound(from, replies);
+      } catch (error) {
+        console.error("[WhatsApp deliver]", error);
+        try {
+          await sendWhatsAppText(
+            from,
+            "Recebi seu pedido, mas não consegui abrir o menu completo. Envie *menu* ou *divulgar* para tentar de novo."
+          );
+        } catch (sendError) {
+          console.error("[WhatsApp] falha no fallback de entrega", sendError);
         }
       }
     });

@@ -90,10 +90,11 @@ export function editMenuMessage(slug: string): WhatsAppOutbound {
       {
         title: "Divulgar",
         rows: [
-          { id: "lia_kit", title: "Kit completo", description: "Status, grupo, Insta e bio" },
-          { id: "lia_status", title: "Status WhatsApp", description: "Texto pro Status" },
-          { id: "lia_instagram", title: "Legenda Instagram", description: "Post com hashtags" },
-          { id: "open_divulgar", title: "Mais opções", description: "Grupo, bio, gancho..." },
+          {
+            id: "open_divulgar",
+            title: "Divulgar com Lia",
+            description: "Status, Instagram, bio e mais",
+          },
         ],
       },
     ]
@@ -196,6 +197,7 @@ function menuTrigger(message: IncomingMessage): boolean {
   return (
     t === "" ||
     t === "menu" ||
+    t === "ver menu" ||
     t === "oi" ||
     t === "olá" ||
     t === "ola" ||
