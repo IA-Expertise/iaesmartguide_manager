@@ -39,18 +39,14 @@ export default async function TenantSitePage({ params }: PageProps) {
     <main className={styles.page} style={cssVars}>
       <header className={styles.hero}>
         <div className={styles.heroBg} aria-hidden />
+        {tenant.logoUrl ? (
+          <img src={tenant.logoUrl} alt="" className={styles.logo} />
+        ) : (
+          <div className={styles.logoPlaceholder} aria-hidden>
+            {tenant.businessName.charAt(0).toUpperCase()}
+          </div>
+        )}
         <div className={styles.heroContent}>
-          {tenant.logoUrl ? (
-            <img
-              src={tenant.logoUrl}
-              alt=""
-              className={styles.logo}
-            />
-          ) : (
-            <div className={styles.logoPlaceholder} aria-hidden>
-              {tenant.businessName.charAt(0).toUpperCase()}
-            </div>
-          )}
           <h1 className={styles.title}>{tenant.businessName}</h1>
         </div>
       </header>

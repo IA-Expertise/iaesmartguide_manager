@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { processLogoForWeb } from "./logo-image.js";
 import { isR2Configured, uploadToR2 } from "./r2.js";
 import { downloadWhatsAppMedia } from "./whatsapp-media.js";
 
@@ -24,8 +25,15 @@ export async function persistWhatsAppImage(
     return `${PENDING_PREFIX}${mediaId}`;
   }
 
-  const { buffer, contentType } = await downloadWhatsAppMedia(mediaId);
-  const ext = extensionFromMime(contentType);
+  let { buffer, contentType } = await downloadWhatsAppMedia(mediaId);
+
+  if (kind === "logo") {
+    const processed = await processLogoForWeb(buffer, contentType);
+    buffer = processed.buffer;
+    contentType = processed.contentType;
+  }
+
+  const ext = kind === "logo" ? ".png" : extensionFromMime(contentType);
   const folder = kind === "logo" ? "logo" : "photos";
   const key = `tenants/${tenantSlug}/${folder}/${Date.now()}-${randomUUID()}${ext}`;
 
