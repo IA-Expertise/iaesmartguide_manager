@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { fetchTenant } from "@/lib/api";
 import { themeFromSlug, themeToCssVars, youtubeEmbedId } from "@/lib/theme";
 import { IconBag, IconGallery, IconMapPin, IconPlay, IconSpark } from "./icons";
+import { PhotoGallery } from "./photo-gallery";
 import styles from "./site.module.css";
 
 interface PageProps {
@@ -71,16 +72,7 @@ export default async function TenantSitePage({ params }: PageProps) {
               </span>
               <h2 id="gallery-heading">Galeria</h2>
             </div>
-            <div className={styles.photoGrid}>
-              {tenant.photos.map((url, i) => (
-                <figure
-                  key={url}
-                  className={`${styles.photoFrame} ${i === 0 ? styles.photoFeatured : ""}`}
-                >
-                  <img src={url} alt={`Foto ${i + 1} de ${tenant.businessName}`} className={styles.photo} />
-                </figure>
-              ))}
-            </div>
+            <PhotoGallery photos={tenant.photos} businessName={tenant.businessName} />
           </section>
         )}
 
