@@ -39,28 +39,38 @@ export default async function TenantSitePage({ params }: PageProps) {
   const heroTagline = resolveHeroTagline(tenant.tagline, tenant.description);
   const aboutText = introBody(tenant.description, heroTagline);
   const hasStickyActions = Boolean(tenant.address?.trim() || tenant.whatsappNumber?.trim());
+  const showHeroBand = Boolean(heroTagline);
 
   return (
     <main
       className={`${styles.page}${hasStickyActions ? ` ${styles.pageWithSticky}` : ""}`}
       style={cssVars}
     >
-      <header className={styles.hero}>
-        <div className={styles.heroBg} aria-hidden />
+      <div className={styles.siteHeader}>
         {tenant.logoUrl ? (
-          <img src={tenant.logoUrl} alt="" className={styles.logo} />
+          <>
+            <img
+              src={tenant.logoUrl}
+              alt={tenant.businessName}
+              className={styles.headerLogo}
+            />
+            <h1 className={styles.srOnly}>{tenant.businessName}</h1>
+          </>
         ) : (
-          <div className={styles.logoPlaceholder} aria-hidden>
-            {tenant.businessName.charAt(0).toUpperCase()}
-          </div>
+          <h1 className={styles.headerTitle}>{tenant.businessName}</h1>
         )}
-        <div className={styles.heroContent}>
-          {heroTagline && <p className={styles.tagline}>{heroTagline}</p>}
-          <h1 className={tenant.logoUrl ? styles.titleCompact : styles.title}>
-            {tenant.businessName}
-          </h1>
-        </div>
-      </header>
+      </div>
+
+      {showHeroBand && (
+        <header className={styles.hero}>
+          <div className={styles.heroBg} aria-hidden />
+          <p className={styles.tagline}>{heroTagline}</p>
+        </header>
+      )}
+
+      {!showHeroBand && !tenant.logoUrl && (
+        <h1 className={styles.srOnly}>{tenant.businessName}</h1>
+      )}
 
       <div className={styles.content}>
         {aboutText && (
@@ -69,12 +79,6 @@ export default async function TenantSitePage({ params }: PageProps) {
           </section>
         )}
 
-        {tenant.address && (
-          <section className={styles.addressCard} aria-label="Endereço">
-            <IconMapPin className={styles.addressCardIcon} />
-            <p className={styles.addressCardText}>{tenant.address}</p>
-          </section>
-        )}
         {hasGallery && (
           <section className={styles.section} aria-labelledby="gallery-heading">
             <div className={styles.sectionHead}>
@@ -131,7 +135,7 @@ export default async function TenantSitePage({ params }: PageProps) {
           </section>
         )}
 
-        {!hasGallery && !hasProducts && !tenant.youtubeUrl && (
+        {!hasGallery && !hasProducts && !tenant.youtubeUrl && !aboutText && (
           <section className={styles.emptyState}>
             <p>Em breve mais conteúdo sobre {tenant.businessName}.</p>
           </section>
@@ -143,6 +147,12 @@ export default async function TenantSitePage({ params }: PageProps) {
       )}
 
       <footer className={styles.footer}>
+        {tenant.address && (
+          <p className={styles.footerAddress}>
+            <IconMapPin className={styles.footerAddressIcon} aria-hidden />
+            <span>{tenant.address}</span>
+          </p>
+        )}
         <div className={styles.footerLine} aria-hidden />
         <small>
           Mini-site por <strong>IAE Smart Guide</strong>

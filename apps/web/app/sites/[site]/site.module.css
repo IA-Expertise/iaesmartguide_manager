@@ -12,12 +12,57 @@
   padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
 }
 
-/* —— Hero —— */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* —— Header fixo (logo) —— */
+.siteHeader {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.5rem;
+  padding: 0.5rem 1rem;
+  background: #fff;
+  border-bottom: 1px solid rgba(28, 25, 23, 0.08);
+  box-shadow: 0 1px 12px rgba(28, 25, 23, 0.05);
+}
+
+.headerLogo {
+  display: block;
+  width: auto;
+  max-width: min(240px, 78vw);
+  max-height: 2.75rem;
+  object-fit: contain;
+}
+
+.headerTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 4.5vw, 1.35rem);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--accent-dark);
+  text-align: center;
+}
+
+/* —— Faixa verde (só tagline) —— */
 .hero {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  padding: 1.35rem 1rem 1.5rem;
+  padding: 0.85rem 1rem 1rem;
   color: #fff;
   text-align: center;
 }
@@ -46,68 +91,14 @@
   background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
 }
 
-.heroContent {
-  position: relative;
-  z-index: 2;
-  max-width: 420px;
-  margin: 0 auto;
-}
-
-.logo {
-  position: relative;
-  z-index: 1;
-  display: block;
-  width: min(280px, 88vw);
-  height: auto;
-  margin: 0 auto 0.65rem;
-  object-fit: contain;
-  /* Fallback visual se o arquivo ainda tiver fundo escuro (JPEG do WhatsApp) */
-  mix-blend-mode: lighten;
-}
-
-.logoPlaceholder {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: min(140px, 40vw);
-  height: min(140px, 40vw);
-  margin: 0 auto 0.65rem;
-  font-family: var(--font-display);
-  font-size: clamp(3rem, 12vw, 4.5rem);
-  font-weight: 600;
-  color: #fff;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
-}
-
-.title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(1.35rem, 4.5vw, 1.75rem);
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.12);
-}
-
-.titleCompact {
-  margin: 0.5rem 0 0;
-  font-family: var(--font-body);
-  font-size: clamp(0.92rem, 3.2vw, 1.05rem);
-  font-weight: 500;
-  line-height: 1.3;
-  letter-spacing: 0.01em;
-  color: rgba(255, 255, 255, 0.88);
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
-}
-
 .tagline {
-  margin: 0.75rem 0 0;
+  position: relative;
+  z-index: 1;
+  margin: 0;
   max-width: 22em;
   margin-inline: auto;
   font-family: var(--font-display);
-  font-size: clamp(1.2rem, 5.4vw, 1.55rem);
+  font-size: clamp(1.1rem, 5vw, 1.45rem);
   font-weight: 700;
   line-height: 1.35;
   letter-spacing: -0.02em;
@@ -115,9 +106,8 @@
   text-shadow: 0 2px 14px rgba(0, 0, 0, 0.22);
 }
 
-/* —— Intro & address (below hero) —— */
-.introCard,
-.addressCard {
+/* —— Intro —— */
+.introCard {
   margin-bottom: 1rem;
   padding: 1rem 1.15rem;
   background: #fff;
@@ -136,33 +126,11 @@
   text-align: center;
 }
 
-.addressCard {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  border-left: 4px solid var(--accent);
-}
-
-.addressCardIcon {
-  flex-shrink: 0;
-  width: 1.35rem;
-  height: 1.35rem;
-  margin-top: 0.1rem;
-  color: var(--accent);
-}
-
-.addressCardText {
-  margin: 0;
-  font-size: 0.95rem;
-  line-height: 1.5;
-  color: #292524;
-}
-
 /* —— Content —— */
 .content {
   max-width: 960px;
-  margin: -1.25rem auto 0;
-  padding: 0 1rem 2rem;
+  margin: 0 auto;
+  padding: 0.85rem 1rem 2rem;
   position: relative;
   z-index: 2;
 }
@@ -547,9 +515,29 @@
 }
 
 .footer {
-  padding: 2rem 1.25rem 2.5rem;
+  padding: 1.25rem 1.25rem 2rem;
   text-align: center;
   color: #a8a29e;
+}
+
+.footerAddress {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  max-width: 28rem;
+  margin: 0 auto 1rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: #78716c;
+  text-align: left;
+}
+
+.footerAddressIcon {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.15rem;
+  color: var(--accent);
 }
 
 .footerLine {
