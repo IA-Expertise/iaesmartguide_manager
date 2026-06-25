@@ -166,7 +166,7 @@ export function marketingErrorMessage(error: unknown): string {
 }
 
 export function isMarketingAction(actionId: string): boolean {
-  return actionId.startsWith("lia_");
+  return actionId.startsWith("lia_") || actionId === "open_divulgar";
 }
 
 export function marketingKindFromAction(actionId: string): MarketingKind | null {
