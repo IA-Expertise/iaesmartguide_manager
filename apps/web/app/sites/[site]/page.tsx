@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { fetchTenant } from "@/lib/api";
 import { themeFromSlug, themeToCssVars, youtubeEmbedId } from "@/lib/theme";
-import { IconBag, IconGallery, IconMapPin, IconPlay, IconSpark } from "./icons";
+import { IconBag, IconGallery, IconMapPin, IconPlay } from "./icons";
 import { PhotoGallery } from "./photo-gallery";
 import { ProductList } from "./product-list";
 import styles from "./site.module.css";
@@ -40,10 +40,6 @@ export default async function TenantSitePage({ params }: PageProps) {
       <header className={styles.hero}>
         <div className={styles.heroBg} aria-hidden />
         <div className={styles.heroContent}>
-          <span className={styles.badge}>
-            <IconSpark className={styles.badgeIcon} />
-            Smart Guide
-          </span>
           {tenant.logoUrl ? (
             <div className={styles.logoWrap}>
               <img src={tenant.logoUrl} alt="" className={styles.logo} />
@@ -54,17 +50,22 @@ export default async function TenantSitePage({ params }: PageProps) {
             </div>
           )}
           <h1 className={styles.title}>{tenant.businessName}</h1>
-          {tenant.description && <p className={styles.lead}>{tenant.description}</p>}
-          {tenant.address && (
-            <p className={styles.address}>
-              <IconMapPin className={styles.addressIcon} />
-              {tenant.address}
-            </p>
-          )}
         </div>
       </header>
 
       <div className={styles.content}>
+        {tenant.description && (
+          <section className={styles.introCard} aria-label="Sobre">
+            <p className={styles.introText}>{tenant.description}</p>
+          </section>
+        )}
+
+        {tenant.address && (
+          <section className={styles.addressCard} aria-label="Endereço">
+            <IconMapPin className={styles.addressCardIcon} />
+            <p className={styles.addressCardText}>{tenant.address}</p>
+          </section>
+        )}
         {hasGallery && (
           <section className={styles.section} aria-labelledby="gallery-heading">
             <div className={styles.sectionHead}>
