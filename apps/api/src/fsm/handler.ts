@@ -12,14 +12,10 @@ import { isPlaceholderSlug } from "../utils/phone.js";
 import { ensureChatStateForWhatsApp, findTenantByWhatsApp } from "../lib/whatsapp-db.js";
 import { slugify } from "../utils/slugify.js";
 import { config } from "../config.js";
+import { editMenuMessage, handleEditingMessage, isEditingState } from "./editing.js";
+import type { IncomingMessage } from "./types.js";
 
-interface IncomingMessage {
-  from: string;
-  type: "text" | "image" | "interactive";
-  text?: string;
-  imageId?: string;
-  buttonId?: string;
-}
+export type { IncomingMessage } from "./types.js";
 
 const ADVANCE_PHOTOS = [{ id: "advance_photos", title: "Avançar" }];
 const SKIP_YOUTUBE = [{ id: "skip_youtube", title: "Pular" }];
@@ -40,9 +36,8 @@ async function beginOnboarding(
       data: { currentState: ChatStates.CONFIRMED },
     });
     return [
-      textMessage(
-        `Olá! Seu site já está ativo em https://${tenant.slug}.${domain}. Envie uma mensagem para atualizar produtos ou fotos.`
-      ),
+      textMessage(`Olá! Seu site está ativo em https://${tenant.slug}.${domain}.`),
+      editMenuMessage(tenant.slug),
     ];
   }
 
@@ -260,21 +255,17 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<W
       });
 
       replies.push(textMessage(`Seu site está pronto! Acesse: https://${slug}.${domain}`));
+      replies.push(editMenuMessage(slug));
       break;
     }
 
-    case ChatStates.CONFIRMED:
-    case ChatStates.EDITING: {
-      replies.push(
-        textMessage(
-          "Atualizações via IA serão implementadas em breve. Use o painel web por enquanto."
-        )
-      );
-      break;
+    default: {
+      if (isEditingState(currentState)) {
+        replies.push(...(await handleEditingMessage(message, phone, currentState, tempData)));
+        break;
+      }
+      replies.push(textMessage("Não entendi. Envie *menu* para ver as opções."));
     }
-
-    default:
-      replies.push(textMessage("Não entendi. Envie qualquer mensagem para recomeçar."));
   }
 
   return replies;

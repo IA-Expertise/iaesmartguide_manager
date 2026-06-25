@@ -2,9 +2,21 @@ import { config } from "../config.js";
 
 const GRAPH = "https://graph.facebook.com/v21.0";
 
+export interface ListRow {
+  id: string;
+  title: string;
+  description?: string;
+}
+
+export interface ListSection {
+  title: string;
+  rows: ListRow[];
+}
+
 export type WhatsAppOutbound =
   | { type: "text"; body: string }
-  | { type: "buttons"; body: string; buttons: Array<{ id: string; title: string }> };
+  | { type: "buttons"; body: string; buttons: Array<{ id: string; title: string }> }
+  | { type: "list"; body: string; buttonLabel: string; sections: ListSection[] };
 
 export function isWhatsAppConfigured(): boolean {
   return Boolean(config.whatsapp.token && config.whatsapp.phoneNumberId);
@@ -19,6 +31,14 @@ export function buttonsMessage(
   buttons: Array<{ id: string; title: string }>
 ): WhatsAppOutbound {
   return { type: "buttons", body, buttons };
+}
+
+export function listMessage(
+  body: string,
+  buttonLabel: string,
+  sections: ListSection[]
+): WhatsAppOutbound {
+  return { type: "list", body, buttonLabel, sections };
 }
 
 async function sendPayload(to: string, message: Record<string, unknown>): Promise<void> {
@@ -77,12 +97,40 @@ export async function sendWhatsAppButtons(
   });
 }
 
+export async function sendWhatsAppList(
+  to: string,
+  body: string,
+  buttonLabel: string,
+  sections: ListSection[]
+): Promise<void> {
+  await sendPayload(to, {
+    type: "interactive",
+    interactive: {
+      type: "list",
+      body: { text: body },
+      action: {
+        button: buttonLabel.slice(0, 20),
+        sections: sections.map((section) => ({
+          title: section.title.slice(0, 24),
+          rows: section.rows.slice(0, 10).map((row) => ({
+            id: row.id,
+            title: row.title.slice(0, 24),
+            description: row.description?.slice(0, 72),
+          })),
+        })),
+      },
+    },
+  });
+}
+
 export async function deliverOutbound(to: string, messages: WhatsAppOutbound[]): Promise<void> {
   for (const message of messages) {
     if (message.type === "text") {
       await sendWhatsAppText(to, message.body);
-    } else {
+    } else if (message.type === "buttons") {
       await sendWhatsAppButtons(to, message.body, message.buttons);
+    } else {
+      await sendWhatsAppList(to, message.body, message.buttonLabel, message.sections);
     }
   }
 }
