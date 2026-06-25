@@ -330,7 +330,9 @@ _Use esta seção para anotar feedback dos 3 amigos e de produção._
 | Data | Projeto | Lição |
 |------|---------|-------|
 | 2026-06 | IAE Smart Guide | Listas WhatsApp: máx. 10 linhas |
+| 2026-06 | IAE Smart Guide | Marketing: foto + assunto antes da IA |
 | 2026-06 | IAE Smart Guide | Novos projetos: WABA + app Meta dedicados (§8) |
+| | | |
 
 ---
 
