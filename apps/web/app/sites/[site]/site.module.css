@@ -32,8 +32,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 3.5rem;
-  padding: 0.5rem 1rem;
+  min-height: 5.25rem;
+  padding: 0.75rem 1rem;
   background: #fff;
   border-bottom: 1px solid rgba(28, 25, 23, 0.08);
   box-shadow: 0 1px 12px rgba(28, 25, 23, 0.05);
@@ -42,15 +42,15 @@
 .headerLogo {
   display: block;
   width: auto;
-  max-width: min(240px, 78vw);
-  max-height: 2.75rem;
+  max-width: min(300px, 85vw);
+  max-height: 4.15rem;
   object-fit: contain;
 }
 
 .headerTitle {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(1.1rem, 4.5vw, 1.35rem);
+  font-size: clamp(1.25rem, 5vw, 1.55rem);
   font-weight: 600;
   line-height: 1.2;
   color: var(--accent-dark);
