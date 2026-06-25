@@ -9,6 +9,7 @@ import {
   type WhatsAppOutbound,
 } from "../services/whatsapp-send.js";
 import { isPlaceholderSlug } from "../utils/phone.js";
+import { ensureChatStateForWhatsApp, findTenantByWhatsApp } from "../lib/whatsapp-db.js";
 import { slugify } from "../utils/slugify.js";
 import { config } from "../config.js";
 
@@ -25,21 +26,10 @@ const SKIP_YOUTUBE = [{ id: "skip_youtube", title: "Pular" }];
 
 export async function handleWhatsAppMessage(message: IncomingMessage): Promise<WhatsAppOutbound[]> {
   const replies: WhatsAppOutbound[] = [];
-  const phone = message.from;
   const domain = config.rootDomain;
 
-  let state = await prisma.chatState.findUnique({ where: { whatsappNumber: phone } });
-  const tenant = await prisma.tenant.findUnique({ where: { whatsappNumber: phone } });
-
-  if (!state) {
-    state = await prisma.chatState.create({
-      data: {
-        whatsappNumber: phone,
-        currentState: ChatStates.START,
-        tempData: {},
-      },
-    });
-  }
+  const { state, phone } = await ensureChatStateForWhatsApp(prisma, message.from);
+  const tenant = await findTenantByWhatsApp(prisma, message.from);
 
   const currentState = state.currentState;
   const tempData = (state.tempData ?? {}) as TempData;
@@ -83,7 +73,7 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<W
     }
 
     case ChatStates.WAITING_PAYMENT: {
-      const freshTenant = await prisma.tenant.findUnique({ where: { whatsappNumber: phone } });
+      const freshTenant = await findTenantByWhatsApp(prisma, phone);
       if (freshTenant?.paymentStatus === "paid") {
         if (!isPlaceholderSlug(freshTenant.slug)) {
           await prisma.chatState.update({

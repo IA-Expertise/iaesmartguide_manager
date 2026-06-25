@@ -6,7 +6,12 @@ import { runDbPush } from "../lib/db-setup.js";
 import { runSeed } from "../lib/seed.js";
 import { config } from "../config.js";
 import { ChatStates } from "../fsm/states.js";
-import { normalizePhone } from "../utils/phone.js";
+import {
+  findTenantByWhatsApp,
+  prepareWhatsAppTestUser,
+  resetWhatsAppChat,
+} from "../lib/whatsapp-db.js";
+import { normalizePhone, brazilPhoneVariants, canonicalBrazilWhatsApp } from "../utils/phone.js";
 
 export const adminRouter = Router();
 
@@ -123,42 +128,20 @@ adminRouter.get("/whatsapp-prepare-test", async (req, res) => {
     return;
   }
 
-  const phone = normalizePhone(String(req.query.phone ?? ""));
-  if (!phone) {
-    res.status(400).json({ error: "Informe ?phone=5511999999999 (seu número com DDD)" });
+  const rawPhone = String(req.query.phone ?? "");
+  if (!normalizePhone(rawPhone)) {
+    res.status(400).json({ error: "Informe ?phone=5511999999999 (seu celular com DDD)" });
     return;
   }
 
   const prisma = new PrismaClient();
   try {
-    await prisma.tenant.upsert({
-      where: { whatsappNumber: phone },
-      create: {
-        whatsappNumber: phone,
-        ownerName: "Teste",
-        businessName: "Pendente",
-        slug: `pending-${phone.slice(-8)}`,
-        paymentStatus: "paid",
-      },
-      update: { paymentStatus: "paid" },
-    });
-
-    await prisma.chatState.upsert({
-      where: { whatsappNumber: phone },
-      create: {
-        whatsappNumber: phone,
-        currentState: ChatStates.START,
-        tempData: {},
-      },
-      update: {
-        currentState: ChatStates.START,
-        tempData: {},
-      },
-    });
+    const phone = await prepareWhatsAppTestUser(prisma, rawPhone);
 
     res.json({
       ok: true,
       phone,
+      variants: brazilPhoneVariants(String(req.query.phone ?? "")),
       hint: "Use o celular de quem ENVIA a mensagem — não o número business (+55 19 93619-6154).",
       message:
         "Número liberado para teste (pagamento simulado). Envie uma mensagem no WhatsApp para iniciar o cadastro.",
@@ -183,10 +166,18 @@ adminRouter.get("/whatsapp-status", async (req, res) => {
 
     if (phone) {
       const [tenant, chatState] = await Promise.all([
-        prisma.tenant.findUnique({ where: { whatsappNumber: phone } }),
-        prisma.chatState.findUnique({ where: { whatsappNumber: phone } }),
+        findTenantByWhatsApp(prisma, phone),
+        prisma.chatState.findUnique({
+          where: { whatsappNumber: canonicalBrazilWhatsApp(phone) },
+        }),
       ]);
-      res.json({ ok: true, phone, tenant, chatState });
+      res.json({
+        ok: true,
+        phone: canonicalBrazilWhatsApp(phone),
+        variants: brazilPhoneVariants(phone),
+        tenant,
+        chatState,
+      });
       return;
     }
 
@@ -221,8 +212,8 @@ adminRouter.get("/whatsapp-reset", async (req, res) => {
 
   const prisma = new PrismaClient();
   try {
-    await prisma.chatState.deleteMany({ where: { whatsappNumber: phone } });
-    res.json({ ok: true, phone, message: "Estado da conversa resetado." });
+    const cleared = await resetWhatsAppChat(prisma, String(req.query.phone ?? ""));
+    res.json({ ok: true, phone: cleared, message: "Estado da conversa resetado." });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: "Falha ao resetar", detail });

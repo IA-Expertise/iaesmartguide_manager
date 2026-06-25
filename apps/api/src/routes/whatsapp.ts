@@ -3,6 +3,7 @@ import { Router } from "express";
 import { config } from "../config.js";
 import { handleWhatsAppMessage } from "../fsm/handler.js";
 import { deliverOutbound } from "../services/whatsapp-send.js";
+import { canonicalBrazilWhatsApp } from "../utils/phone.js";
 
 export const whatsappRouter = Router();
 
@@ -56,7 +57,10 @@ whatsappRouter.post("/", async (req, res) => {
     if (!message) return;
 
     const from = message.from as string;
-    console.log(`[WhatsApp] mensagem de ${from} (phone_number_id=${value?.metadata?.phone_number_id ?? "?"})`);
+    const canonical = canonicalBrazilWhatsApp(from);
+    console.log(
+      `[WhatsApp] from=${from} canonical=${canonical} phone_number_id=${value?.metadata?.phone_number_id ?? "?"}`
+    );
     let incoming: Parameters<typeof handleWhatsAppMessage>[0];
 
     if (message.type === "text") {
