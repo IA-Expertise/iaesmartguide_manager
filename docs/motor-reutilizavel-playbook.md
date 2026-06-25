@@ -1,0 +1,265 @@
+# Motor reutilizável — Playbook IAE Smart Guide
+
+Documento vivo para **reaproveitar este motor** em outros projetos (outros nichos, outros domínios, outras marcas).  
+Atualizado com os acertos e armadilhas encontrados no piloto **IAE Smart Guide** (turismo rural).
+
+---
+
+## 1. O que é o “motor”
+
+Conjunto de padrões e módulos que se repetem em qualquer produto do tipo **“mini-site + gestão por WhatsApp + IA opcional”**:
+
+| Camada | Responsabilidade | Stack deste projeto |
+|--------|------------------|---------------------|
+| **API + FSM** | Webhook WhatsApp, máquina de estados, CRUD tenant | Express + Prisma (`apps/api`) |
+| **DB** | Tenants, fotos, produtos, estado do chat | PostgreSQL + Prisma (`packages/db`) |
+| **Web vitrine** | Subdomínio por slug, mobile-first | Next.js middleware (`apps/web`) |
+| **Mídia** | Imagens persistentes (Meta expira URL) | Cloudflare R2 |
+| **IA** | Textos de marketing sob demanda | Gemini via REST (`lia-marketing.ts`) |
+| **Deploy** | API + DB | Railway |
+| **Deploy** | Site | Vercel (`apps/web`) |
+| **Webhook Meta** | Verificação + encaminhamento | Replit proxy (opcional) |
+
+---
+
+## 2. Arquitetura (copiar mentalmente)
+
+```
+Produtor → WhatsApp (Lia)
+              ↓
+         Webhook (Replit ou direto)
+              ↓
+         API Railway (FSM + serviços)
+              ↓
+         PostgreSQL ← fonte única
+              ↓
+         Next.js (slug.dominio.com.br)
+```
+
+**Regra de ouro:** um número WhatsApp = um tenant. Todo fluxo passa pelo `chat_states.current_state`.
+
+---
+
+## 3. Estrutura do monorepo (template)
+
+```
+projeto/
+├── apps/
+│   ├── api/          # Express, webhooks, FSM, admin
+│   └── web/          # Next.js vitrine + middleware subdomínio
+├── packages/
+│   └── db/           # Prisma schema + client
+├── docs/             # Playbooks e prompts
+├── docker-compose.yml
+├── railway.toml
+├── .env.example
+└── package.json      # workspaces npm
+```
+
+**Scripts úteis na raiz:** `build:api`, `build:web`, `dev:api`, `dev:web`, `db:push`, `db:seed`.
+
+---
+
+## 4. Checklist ao clonar para um novo projeto
+
+### 4.1 Git / repositório
+
+Escolher uma estratégia (ver seção 7 deste doc):
+
+- [ ] Novo repo vazio + cópia dos módulos reutilizáveis
+- [ ] Template GitHub a partir deste repo
+- [ ] Fork + rename (se quiser histórico)
+
+### 4.2 Rebrand (obrigatório)
+
+- [ ] Nome do produto / persona do bot (ex.: Lia → outro nome)
+- [ ] `NEXT_PUBLIC_ROOT_DOMAIN` e DNS wildcard `*.dominio`
+- [ ] Textos em `handler.ts`, `editing.ts`, `lia-marketing.ts` (tom de voz)
+- [ ] Logo/créditos no layout web (`apps/web`)
+- [ ] `SEED_SECRET`, `JWT_SECRET`, `REVALIDATE_SECRET` novos
+- [ ] Conta Meta WhatsApp / número / `PHONE_NUMBER_ID`
+
+### 4.3 Infra
+
+- [ ] Railway: Postgres + API (variável `PORT`, não fixar porta)
+- [ ] Vercel: root `apps/web`, build monorepo
+- [ ] R2: bucket + `R2_PUBLIC_URL`
+- [ ] `GEMINI_API_KEY` (se usar marketing IA)
+- [ ] Webhook: Replit ou direto na Railway (`docs/prompt-replit-webhook-forward.md`)
+
+### 4.4 Schema Prisma
+
+Adaptar `Tenant` ao nicho, mantendo o padrão:
+
+- `slug`, `whatsappNumber` (unique), `businessName`
+- `logoUrl`, fotos (`TenantPhoto`), ofertas (`TenantProduct`)
+- `chat_states` com `current_state` + `temp_data` JSON
+
+Rodar: `GET /api/admin/setup?secret=SEED_SECRET` ou `prisma db push` no deploy.
+
+---
+
+## 5. Padrões de código que funcionaram
+
+### 5.1 FSM WhatsApp
+
+- **Estados explícitos** em `states.ts` — nunca string solta.
+- **`tempData`** para dados entre passos (slug, fotos pendentes, marketing).
+- **Fila por número** (`whatsapp-queue.ts`) — evita race quando usuário manda várias fotos seguidas.
+- **Dedup de webhook** (`whatsapp-dedup.ts`) — Meta/Replit podem repetir POST.
+- **Responder 200 imediato** no webhook; processar async na fila.
+- **Separar erro de handler vs erro de entrega** — não mandar “algo deu errado” em loop.
+
+### 5.2 Menus interativos WhatsApp
+
+- **Máximo 10 linhas por lista** (total, todas as seções). Exceder = API rejeita silenciosamente ou loop de erro.
+- Truncar com segurança em `sendWhatsAppList` + log de aviso.
+- Submenu quando passar de 10 itens (ex.: “Ver mais imagens”).
+- Botões: máx. 3. Títulos: 24 chars. Descrições: 72 chars.
+
+### 5.3 Mídia
+
+- Logo: processar com **Sharp** (`logo-image.ts`); PNG transparente via **documento** no WhatsApp.
+- URLs Meta expiram → **persistir no R2** antes de salvar no banco.
+- Prefixo `pending://` para mídia recebida antes do slug existir; resolver no publish.
+
+### 5.4 Web vitrine
+
+- **Middleware** reescreve subdomínio → `/sites/[slug]`.
+- **Revalidate** após edição (`revalidateTenant` + `REVALIDATE_SECRET`).
+- Mobile-first: header fixo, ações sticky, endereço no rodapé (ver PDF de layout).
+
+### 5.5 Marketing com IA (Lia)
+
+- **Gemini via REST** (`fetch` + `AbortSignal`), não depender só do SDK antigo.
+- Modelos ativos: `gemini-2.5-flash`, fallback `gemini-3.1-flash-lite`.
+- **Fluxo em etapas:** ferramenta → (foto) → assunto → gerar.
+- **Prompt:** proibir “Aqui está…”, entregar só texto final; tokens por tipo.
+- **Post com foto:** `image` + `caption` na API WhatsApp; caption máx. 1024 chars.
+- **3 ferramentas** bastam: Post com foto | Texto compartilhar | Gancho do site.
+
+### 5.6 Admin / debug
+
+Endpoints com `?secret=SEED_SECRET`:
+
+- `/api/admin/whatsapp-check`
+- `/api/admin/gemini-test`
+- `/api/admin/whatsapp-status`
+- `/api/admin/whatsapp-reset?phone=...`
+
+---
+
+## 6. Armadilhas conhecidas (não repetir)
+
+| Problema | Causa | Solução aplicada |
+|----------|--------|------------------|
+| Menu em loop de erro | Lista com >10 itens | Reduzir itens; submenu Divulgar |
+| `open_divulgar` não abria marketing | `isMarketingAction` só `lia_*` | Incluir `open_divulgar` |
+| Texto IA cortado | `maxOutputTokens` baixo + prefácio do modelo | Mais tokens; limpar prefácio; mensagens separadas |
+| Modelos Gemini mortos | 2.0/1.5 desligados | REST + modelos 2.5/3.x |
+| Sem resposta após “Gerando…” | SDK travando / timeout | REST, timeout 55s, fallback de erro |
+| Só 1 foto no seletor | Faltava ofertas + paginação | Galeria + fotos de produto + “Ver mais” |
+| Railway health fail | API não lia `PORT` | Usar `process.env.PORT` |
+
+---
+
+## 7. Como reaproveitar o Git deste app
+
+**Sim, é possível.** Formas práticas:
+
+### Opção A — Template GitHub (recomendado para vários projetos)
+
+1. No GitHub: **Settings → Template repository** neste repo.
+2. Novo projeto: **Use this template** → repo limpo com histórico inicial copiado.
+3. Rebrand + deploy novo.
+
+### Opção B — Clone sem histórico (projeto “zerado”)
+
+```bash
+git clone https://github.com/IA-Expertise/iaesmartguide_manager.git novo-projeto
+cd novo-projeto
+rm -rf .git
+git init
+git add .
+git commit -m "chore: bootstrap from iaesmartguide motor"
+git remote add origin <url-do-novo-repo>
+git push -u origin main
+```
+
+### Opção C — Fork
+
+- Mantém link com o original; bom para contribuir de volta, menos bom para produtos comerciais separados.
+
+### Opção D — Extrair só o “motor” (evolução futura)
+
+Mover para pacotes compartilhados:
+
+```
+packages/
+├── whatsapp-fsm/     # handler, queue, dedup, send
+├── marketing-ai/     # gemini + lia prompts
+├── tenant-media/     # r2 + sharp
+└── db/               # schema base parametrizável
+```
+
+Publicar como workspace interno ou npm privado. **Ainda não feito** — este doc registra a intenção.
+
+### O que NÃO copiar cegamente
+
+- `.env` / secrets
+- `slug` e dados de seed (`adegatoninho`)
+- `PHONE_NUMBER_ID`, tokens Meta
+- Domínio `iaesmartguide.com.br` hardcoded — usar `config.rootDomain`
+
+---
+
+## 8. Variáveis de ambiente (referência)
+
+Ver `.env.example`. Mínimo produção:
+
+- `DATABASE_URL`
+- `WHATSAPP_TOKEN`, `PHONE_NUMBER_ID`, `VERIFY_TOKEN`
+- `WHATSAPP_FORWARD_SECRET` (se Replit)
+- `R2_*` + `R2_PUBLIC_URL`
+- `REVALIDATE_SECRET`, `API_URL`, `NEXT_PUBLIC_ROOT_DOMAIN`
+- `GEMINI_API_KEY` (marketing)
+- `SEED_SECRET` (admin/setup)
+
+---
+
+## 9. Roadmap do motor (fora do piloto atual)
+
+Itens discutidos mas **não implementados** — candidatos ao playbook v2:
+
+- [ ] Assunto livre (texto) no marketing
+- [ ] Editar oferta (hoje só add/delete)
+- [ ] Painel web OTP (Fase 6)
+- [ ] Asaas / `WHATSAPP_REQUIRE_PAYMENT`
+- [ ] PWA nos mini-sites
+- [ ] Lembretes proativos (ex.: sexta-feira)
+- [ ] Templates sem IA (fallback)
+- [ ] Pacote npm `packages/motor` extraído
+
+---
+
+## 10. Histórico de lições (adicionar após pilotos)
+
+_Use esta seção para anotar feedback dos 3 amigos e de produção._
+
+| Data | Projeto | Lição |
+|------|---------|-------|
+| 2026-06 | IAE Smart Guide | Listas WhatsApp: máx. 10 linhas |
+| 2026-06 | IAE Smart Guide | Marketing: foto + assunto antes da IA |
+| | | |
+
+---
+
+## 11. Referências internas
+
+- `docs/prompt-replit-webhook-forward.md` — proxy webhook Meta → Railway
+- `docs/Ajustes Estruturais para Páginas Satélites (Mobile-First).pdf` — layout web
+- Código principal: `apps/api/src/fsm/`, `apps/api/src/services/lia-marketing.ts`, `apps/web/middleware.ts`
+
+---
+
+*Mantenha este arquivo atualizado a cada projeto derivado. Uma linha na tabela §10 vale mais que refatorar no escuro.*
