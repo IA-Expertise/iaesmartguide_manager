@@ -41,9 +41,11 @@ export default async function TenantSitePage({ params }: PageProps) {
         <div className={styles.heroBg} aria-hidden />
         <div className={styles.heroContent}>
           {tenant.logoUrl ? (
-            <div className={styles.logoWrap}>
-              <img src={tenant.logoUrl} alt="" className={styles.logo} />
-            </div>
+            <img
+              src={tenant.logoUrl}
+              alt=""
+              className={styles.logo}
+            />
           ) : (
             <div className={styles.logoPlaceholder} aria-hidden>
               {tenant.businessName.charAt(0).toUpperCase()}
