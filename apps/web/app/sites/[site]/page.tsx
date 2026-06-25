@@ -6,7 +6,6 @@ import { themeFromSlug, themeToCssVars, youtubeEmbedId } from "@/lib/theme";
 import { IconBag, IconGallery, IconMapPin, IconPlay } from "./icons";
 import { PhotoGallery } from "./photo-gallery";
 import { ProductList } from "./product-list";
-import { SocialLinks } from "./social-links";
 import { StickyActions } from "./sticky-actions";
 import { WeatherWidget } from "./weather-widget";
 import styles from "./site.module.css";
@@ -49,7 +48,6 @@ export default async function TenantSitePage({ params }: PageProps) {
       style={cssVars}
     >
       <div className={styles.siteHeader}>
-        <div className={styles.headerAside} aria-hidden />
         <div className={styles.headerBrand}>
           {tenant.logoUrl ? (
             <>
@@ -84,12 +82,6 @@ export default async function TenantSitePage({ params }: PageProps) {
             <p className={styles.introText}>{aboutText}</p>
           </section>
         )}
-
-        <SocialLinks
-          businessName={tenant.businessName}
-          whatsappNumber={tenant.whatsappNumber}
-          instagramUrl={tenant.instagramUrl}
-        />
 
         {hasGallery && (
           <section className={styles.section} aria-labelledby="gallery-heading">
@@ -166,9 +158,7 @@ export default async function TenantSitePage({ params }: PageProps) {
           </p>
         )}
         <div className={styles.footerLine} aria-hidden />
-        <small>
-          Mini-site por <strong>IAE Smart Guide</strong>
-        </small>
+        <small>Mini-site criado por Eduardo Sona para IAE Smart Guide</small>
       </footer>
 
       <StickyActions

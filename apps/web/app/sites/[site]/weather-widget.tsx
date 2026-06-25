@@ -7,7 +7,7 @@ interface WeatherWidgetProps {
 
 export async function WeatherWidget({ address }: WeatherWidgetProps) {
   const weather = await getWeatherForAddress(address);
-  if (!weather) return <div className={styles.headerAside} aria-hidden />;
+  if (!weather) return null;
 
   return (
     <aside
