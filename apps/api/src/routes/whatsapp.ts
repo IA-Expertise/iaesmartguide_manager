@@ -75,6 +75,12 @@ whatsappRouter.post("/", async (req, res) => {
       incoming = { from, type: "text", text: message.text?.body };
     } else if (message.type === "image") {
       incoming = { from, type: "image", imageId: message.image?.id };
+    } else if (message.type === "sticker") {
+      incoming = { from, type: "image", imageId: message.sticker?.id };
+    } else if (message.type === "document") {
+      const mime = (message.document?.mime_type as string | undefined) ?? "";
+      if (!mime.startsWith("image/")) return;
+      incoming = { from, type: "image", imageId: message.document?.id };
     } else if (message.type === "interactive") {
       const buttonId =
         message.interactive?.button_reply?.id ?? message.interactive?.list_reply?.id;

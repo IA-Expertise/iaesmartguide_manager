@@ -137,7 +137,12 @@ async function handleMenuAction(
         where: { whatsappNumber: phone },
         data: { currentState: ChatStates.EDITING_LOGO, tempData: {} },
       });
-      return [buttonsMessage("Envie a nova imagem do logo.", CANCEL_EDIT)];
+      return [
+        buttonsMessage(
+          "Envie o novo logo (imagem ou documento 📎). PNG transparente: use documento.",
+          CANCEL_EDIT
+        ),
+      ];
     case "edit_photos":
       await prisma.chatState.update({
         where: { whatsappNumber: phone },
@@ -224,7 +229,11 @@ export async function handleEditingMessage(
 
     case ChatStates.EDITING_LOGO: {
       if (message.type !== "image" || !message.imageId) {
-        return [textMessage("Envie uma imagem para o logo.")];
+        return [
+          textMessage(
+            "Envie o logo como imagem ou documento (📎). Para PNG transparente, use documento."
+          ),
+        ];
       }
       try {
         const logoUrl = await persistWhatsAppImage(message.imageId, slug, "logo");

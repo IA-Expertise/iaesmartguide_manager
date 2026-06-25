@@ -119,13 +119,17 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<W
           tempData: { ...tempData, businessName, slug },
         },
       });
-      replies.push(textMessage(`Ótimo! Agora envie a imagem do logotipo de "${businessName}".`));
+      replies.push(textMessage(`Ótimo! Agora envie o logotipo de "${businessName}".\n\nDica: para PNG transparente, envie como *documento* (ícone 📎), não como foto.`));
       break;
     }
 
     case ChatStates.COLLECTING_LOGO: {
       if (message.type !== "image" || !message.imageId) {
-        replies.push(textMessage("Envie uma imagem para o logotipo."));
+        replies.push(
+          textMessage(
+            "Envie o logotipo como imagem ou documento (📎). Para PNG transparente, use *documento* — fotos pelo WhatsApp perdem transparência."
+          )
+        );
         break;
       }
       const slug = tempData.slug!;
