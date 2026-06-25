@@ -6,7 +6,9 @@ import { themeFromSlug, themeToCssVars, youtubeEmbedId } from "@/lib/theme";
 import { IconBag, IconGallery, IconMapPin, IconPlay } from "./icons";
 import { PhotoGallery } from "./photo-gallery";
 import { ProductList } from "./product-list";
+import { SocialLinks } from "./social-links";
 import { StickyActions } from "./sticky-actions";
+import { WeatherWidget } from "./weather-widget";
 import styles from "./site.module.css";
 
 interface PageProps {
@@ -47,18 +49,22 @@ export default async function TenantSitePage({ params }: PageProps) {
       style={cssVars}
     >
       <div className={styles.siteHeader}>
-        {tenant.logoUrl ? (
-          <>
-            <img
-              src={tenant.logoUrl}
-              alt={tenant.businessName}
-              className={styles.headerLogo}
-            />
-            <h1 className={styles.srOnly}>{tenant.businessName}</h1>
-          </>
-        ) : (
-          <h1 className={styles.headerTitle}>{tenant.businessName}</h1>
-        )}
+        <div className={styles.headerAside} aria-hidden />
+        <div className={styles.headerBrand}>
+          {tenant.logoUrl ? (
+            <>
+              <img
+                src={tenant.logoUrl}
+                alt={tenant.businessName}
+                className={styles.headerLogo}
+              />
+              <h1 className={styles.srOnly}>{tenant.businessName}</h1>
+            </>
+          ) : (
+            <h1 className={styles.headerTitle}>{tenant.businessName}</h1>
+          )}
+        </div>
+        <WeatherWidget address={tenant.address} />
       </div>
 
       {showHeroBand && (
@@ -78,6 +84,12 @@ export default async function TenantSitePage({ params }: PageProps) {
             <p className={styles.introText}>{aboutText}</p>
           </section>
         )}
+
+        <SocialLinks
+          businessName={tenant.businessName}
+          whatsappNumber={tenant.whatsappNumber}
+          instagramUrl={tenant.instagramUrl}
+        />
 
         {hasGallery && (
           <section className={styles.section} aria-labelledby="gallery-heading">

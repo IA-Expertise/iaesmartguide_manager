@@ -4,6 +4,7 @@ export interface TenantPublic {
   whatsappNumber: string;
   logoUrl: string | null;
   youtubeUrl: string | null;
+  instagramUrl: string | null;
   description: string | null;
   tagline: string | null;
   address: string | null;

@@ -4,6 +4,7 @@ import { ChatStates } from "./states.js";
 import { persistWhatsAppImage, resolveMediaUrls } from "../services/media.js";
 import { revalidateTenant } from "../services/revalidate.js";
 import { taglineFromDescription } from "../utils/tagline.js";
+import { normalizeInstagramUrl } from "../utils/instagram.js";
 import { findTenantByWhatsApp } from "../lib/whatsapp-db.js";
 import { appendPhotoToChatState, MAX_GALLERY_PHOTOS } from "../lib/chat-photos.js";
 import {
@@ -17,6 +18,7 @@ import type { IncomingMessage } from "./types.js";
 
 const ADVANCE_PHOTOS = [{ id: "advance_photos", title: "Avançar" }];
 const SKIP_YOUTUBE = [{ id: "skip_youtube", title: "Pular" }];
+const SKIP_INSTAGRAM = [{ id: "skip_instagram", title: "Remover" }];
 const SKIP_PRODUCT_PRICE = [{ id: "skip_product_price", title: "Sem preço" }];
 const SKIP_PRODUCT_IMAGE = [{ id: "skip_product_image", title: "Sem foto" }];
 const CANCEL_EDIT = [{ id: "cancel_edit", title: "Cancelar" }];
@@ -35,6 +37,7 @@ const EDIT_STATES = new Set<string>([
   ChatStates.EDITING_DELETE_PRODUCT,
   ChatStates.EDITING_DELETE_PRODUCT_CONFIRM,
   ChatStates.EDITING_YOUTUBE,
+  ChatStates.EDITING_INSTAGRAM,
 ]);
 
 export function isEditingState(state: string): boolean {
@@ -53,6 +56,7 @@ export function editMenuMessage(slug: string): WhatsAppOutbound {
           { id: "edit_desc", title: "Descrição", description: "Texto sobre o negócio" },
           { id: "edit_address", title: "Endereço", description: "Onde fica o local" },
           { id: "edit_youtube", title: "YouTube", description: "Link do vídeo" },
+          { id: "edit_instagram", title: "Instagram", description: "Perfil ou @usuario" },
         ],
       },
       {
@@ -205,6 +209,17 @@ async function handleMenuAction(
       });
       return [
         buttonsMessage("Envie o link do YouTube ou toque em Pular.", [...SKIP_YOUTUBE, ...CANCEL_EDIT]),
+      ];
+    case "edit_instagram":
+      await prisma.chatState.update({
+        where: { whatsappNumber: phone },
+        data: { currentState: ChatStates.EDITING_INSTAGRAM, tempData: {} },
+      });
+      return [
+        buttonsMessage(
+          "Envie o link do Instagram ou @usuario (ex: @adegadotoninho). Toque em Remover para apagar.",
+          [...SKIP_INSTAGRAM, ...CANCEL_EDIT]
+        ),
       ];
     default:
       return null;
@@ -490,6 +505,35 @@ export async function handleEditingMessage(
         data: { youtubeUrl: youtubeUrl ?? null },
       });
       return finishEdit(phone, slug, youtubeUrl ? "Link do YouTube atualizado!" : "YouTube removido.");
+    }
+
+    case ChatStates.EDITING_INSTAGRAM: {
+      if (message.type === "interactive" && message.buttonId === "skip_instagram") {
+        await prisma.tenant.update({
+          where: { id: tenant.id },
+          data: { instagramUrl: null },
+        });
+        return finishEdit(phone, slug, "Instagram removido.");
+      }
+      if (message.type !== "text" || !message.text?.trim()) {
+        return [
+          buttonsMessage(
+            "Envie o @usuario ou link do Instagram, ou toque em Remover.",
+            [...SKIP_INSTAGRAM, ...CANCEL_EDIT]
+          ),
+        ];
+      }
+      const instagramUrl = normalizeInstagramUrl(message.text.trim());
+      if (!instagramUrl) {
+        return [
+          textMessage("Não reconheci esse Instagram. Envie @usuario ou o link completo do perfil."),
+        ];
+      }
+      await prisma.tenant.update({
+        where: { id: tenant.id },
+        data: { instagramUrl },
+      });
+      return finishEdit(phone, slug, "Instagram atualizado!");
     }
 
     default:

@@ -24,27 +24,78 @@
   border: 0;
 }
 
-/* —— Header fixo (logo) —— */
+/* —— Header fixo (logo + clima) —— */
 .siteHeader {
   position: sticky;
   top: 0;
   z-index: 40;
-  display: flex;
+  display: grid;
+  grid-template-columns: 4.25rem 1fr 4.25rem;
   align-items: center;
-  justify-content: center;
+  gap: 0.35rem;
   min-height: 5.25rem;
-  padding: 0.75rem 1rem;
+  padding: 0.75rem 0.65rem;
   background: #fff;
   border-bottom: 1px solid rgba(28, 25, 23, 0.08);
   box-shadow: 0 1px 12px rgba(28, 25, 23, 0.05);
 }
 
+.headerAside {
+  width: 4.25rem;
+}
+
+.headerBrand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
 .headerLogo {
   display: block;
   width: auto;
-  max-width: min(300px, 85vw);
+  max-width: min(300px, 72vw);
   max-height: 4.15rem;
   object-fit: contain;
+}
+
+.weatherWidget {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 0.2rem 0;
+  color: #44403c;
+}
+
+.weatherIcon {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.weatherMeta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  line-height: 1.1;
+}
+
+.weatherTemp {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1c1917;
+}
+
+.weatherCity {
+  max-width: 4.25rem;
+  overflow: hidden;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: #78716c;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .headerTitle {
@@ -124,6 +175,67 @@
   line-height: 1.6;
   color: #44403c;
   text-align: center;
+}
+
+/* —— Redes sociais —— */
+.socialSection {
+  margin-bottom: 1rem;
+  padding: 1rem 1.15rem 1.1rem;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow:
+    0 1px 2px rgba(28, 25, 23, 0.04),
+    0 6px 24px rgba(28, 25, 23, 0.05);
+  border: 1px solid rgba(28, 25, 23, 0.06);
+}
+
+.socialHeading {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--accent-dark);
+  text-align: center;
+}
+
+.socialGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.socialGridSingle {
+  grid-template-columns: 1fr;
+}
+
+.socialBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.85rem;
+  padding: 0 0.75rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 12px;
+  transition: transform 0.12s ease;
+}
+
+.socialBtn:active {
+  transform: scale(0.98);
+}
+
+.socialBtnWhatsApp {
+  color: #fff;
+  background: #25d366;
+  box-shadow: 0 2px 8px rgba(37, 211, 102, 0.28);
+}
+
+.socialBtnInstagram {
+  color: #fff;
+  background: linear-gradient(135deg, #f58529 0%, #dd2a7b 50%, #8134af 100%);
+  box-shadow: 0 2px 8px rgba(221, 42, 123, 0.22);
 }
 
 /* —— Content —— */

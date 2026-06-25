@@ -25,6 +25,7 @@ tenantsRouter.get("/:slug", async (req, res) => {
     whatsappNumber: tenant.whatsappNumber,
     logoUrl: tenant.logoUrl,
     youtubeUrl: tenant.youtubeUrl,
+    instagramUrl: tenant.instagramUrl,
     description: tenant.description,
     tagline: tenant.tagline,
     address: tenant.address,

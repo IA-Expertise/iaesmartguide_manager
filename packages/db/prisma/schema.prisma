@@ -15,6 +15,7 @@ model Tenant {
   slug           String   @unique @db.VarChar(50)
   logoUrl        String?  @map("logo_url")
   youtubeUrl     String?  @map("youtube_url")
+  instagramUrl   String?  @map("instagram_url")
   description    String?
   tagline        String?  @db.VarChar(200)
   address        String?
