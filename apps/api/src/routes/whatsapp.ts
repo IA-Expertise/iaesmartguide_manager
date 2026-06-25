@@ -3,6 +3,8 @@ import { Router } from "express";
 import { config } from "../config.js";
 import { handleWhatsAppMessage } from "../fsm/handler.js";
 import { deliverOutbound } from "../services/whatsapp-send.js";
+import { enqueueForPhone } from "../lib/whatsapp-queue.js";
+import { isDuplicateWebhookMessage } from "../lib/whatsapp-dedup.js";
 import { canonicalBrazilWhatsApp } from "../utils/phone.js";
 
 export const whatsappRouter = Router();
@@ -56,10 +58,16 @@ whatsappRouter.post("/", async (req, res) => {
     const message = value?.messages?.[0];
     if (!message) return;
 
+    const messageId = message.id as string | undefined;
+    if (isDuplicateWebhookMessage(messageId)) {
+      console.log(`[WhatsApp] webhook duplicado ignorado: ${messageId}`);
+      return;
+    }
+
     const from = message.from as string;
     const canonical = canonicalBrazilWhatsApp(from);
     console.log(
-      `[WhatsApp] from=${from} canonical=${canonical} phone_number_id=${value?.metadata?.phone_number_id ?? "?"}`
+      `[WhatsApp] from=${from} canonical=${canonical} id=${messageId ?? "?"} phone_number_id=${value?.metadata?.phone_number_id ?? "?"}`
     );
     let incoming: Parameters<typeof handleWhatsAppMessage>[0];
 
@@ -75,10 +83,12 @@ whatsappRouter.post("/", async (req, res) => {
       return;
     }
 
-    const replies = await handleWhatsAppMessage(incoming);
-    if (replies.length) {
-      await deliverOutbound(from, replies);
-    }
+    await enqueueForPhone(canonical, async () => {
+      const replies = await handleWhatsAppMessage(incoming);
+      if (replies.length) {
+        await deliverOutbound(from, replies);
+      }
+    });
   } catch (error) {
     console.error("[WhatsApp webhook]", error);
   }

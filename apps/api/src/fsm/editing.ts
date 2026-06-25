@@ -4,6 +4,7 @@ import { ChatStates } from "./states.js";
 import { persistWhatsAppImage, resolveMediaUrls } from "../services/media.js";
 import { revalidateTenant } from "../services/revalidate.js";
 import { findTenantByWhatsApp } from "../lib/whatsapp-db.js";
+import { appendPhotoToChatState, MAX_GALLERY_PHOTOS } from "../lib/chat-photos.js";
 import {
   buttonsMessage,
   listMessage,
@@ -240,7 +241,8 @@ export async function handleEditingMessage(
 
     case ChatStates.EDITING_PHOTOS: {
       if (message.type === "interactive" && message.buttonId === "advance_photos") {
-        const photos = tempData.photos ?? [];
+        const freshState = await prisma.chatState.findUnique({ where: { whatsappNumber: phone } });
+        const photos = ((freshState?.tempData ?? {}) as TempData).photos ?? [];
         if (!photos.length) {
           return [textMessage("Envie pelo menos uma foto ou toque em Cancelar.")];
         }
@@ -254,14 +256,19 @@ export async function handleEditingMessage(
       if (message.type === "image" && message.imageId) {
         try {
           const photoUrl = await persistWhatsAppImage(message.imageId, slug, "photo");
-          const photos = [...(tempData.photos ?? []), photoUrl].slice(0, 5);
-          await prisma.chatState.update({
-            where: { whatsappNumber: phone },
-            data: { tempData: { ...tempData, photos } },
-          });
+          const { photos, added, atCapacity } = await appendPhotoToChatState(phone, photoUrl);
+          if (!added && atCapacity) {
+            return [
+              buttonsMessage(
+                `Galeria completa (${MAX_GALLERY_PHOTOS}/${MAX_GALLERY_PHOTOS}). Toque em Avançar.`,
+                [...ADVANCE_PHOTOS, ...CANCEL_EDIT]
+              ),
+            ];
+          }
+          if (!added) return [];
           return [
             buttonsMessage(
-              `Foto ${photos.length}/5 recebida. Envie mais ou toque em Avançar.`,
+              `Foto ${photos.length}/${MAX_GALLERY_PHOTOS} recebida. Envie mais ou toque em Avançar.`,
               [...ADVANCE_PHOTOS, ...CANCEL_EDIT]
             ),
           ];

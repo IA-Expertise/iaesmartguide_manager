@@ -10,6 +10,7 @@ import {
 } from "../services/whatsapp-send.js";
 import { isPlaceholderSlug } from "../utils/phone.js";
 import { ensureChatStateForWhatsApp, findTenantByWhatsApp } from "../lib/whatsapp-db.js";
+import { appendPhotoToChatState, MAX_GALLERY_PHOTOS } from "../lib/chat-photos.js";
 import { slugify } from "../utils/slugify.js";
 import { config } from "../config.js";
 import { editMenuMessage, handleEditingMessage, isEditingState } from "./editing.js";
@@ -167,14 +168,20 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<W
       if (message.type === "image" && message.imageId) {
         try {
           const photoUrl = await persistWhatsAppImage(message.imageId, tempData.slug!, "photo");
-          const photos = [...(tempData.photos ?? []), photoUrl].slice(0, 5);
-          await prisma.chatState.update({
-            where: { whatsappNumber: phone },
-            data: { tempData: { ...tempData, photos } },
-          });
+          const { photos, added, atCapacity } = await appendPhotoToChatState(phone, photoUrl);
+          if (!added && atCapacity) {
+            replies.push(
+              buttonsMessage(
+                `Galeria completa (${MAX_GALLERY_PHOTOS}/${MAX_GALLERY_PHOTOS}). Toque em Avançar.`,
+                ADVANCE_PHOTOS
+              )
+            );
+            break;
+          }
+          if (!added) break;
           replies.push(
             buttonsMessage(
-              `Foto ${photos.length}/5 recebida. Envie mais ou toque em Avançar.`,
+              `Foto ${photos.length}/${MAX_GALLERY_PHOTOS} recebida. Envie mais ou toque em Avançar.`,
               ADVANCE_PHOTOS
             )
           );
