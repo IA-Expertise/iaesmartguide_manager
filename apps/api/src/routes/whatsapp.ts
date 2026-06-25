@@ -8,7 +8,7 @@ import {
 } from "../services/whatsapp-send.js";
 import {
   isGeminiConfigured,
-  marketingKindFromAction,
+  isMarketingGenerateAction,
 } from "../services/lia-marketing.js";
 import { enqueueForPhone } from "../lib/whatsapp-queue.js";
 import { isDuplicateWebhookMessage } from "../lib/whatsapp-dedup.js";
@@ -18,14 +18,10 @@ export const whatsappRouter = Router();
 
 const HANDLER_TIMEOUT_MS = 55_000;
 
-function isMarketingGenerateAction(
+function shouldShowMarketingProgress(
   incoming: Parameters<typeof handleWhatsAppMessage>[0]
 ): boolean {
-  if (incoming.type !== "interactive" || !incoming.buttonId?.startsWith("lia_")) {
-    return false;
-  }
-  if (incoming.buttonId === "open_divulgar") return false;
-  return Boolean(marketingKindFromAction(incoming.buttonId));
+  return isMarketingGenerateAction(incoming.buttonId);
 }
 
 function withHandlerTimeout<T>(fn: () => Promise<T>, ms: number): Promise<T> {
@@ -130,7 +126,7 @@ whatsappRouter.post("/", async (req, res) => {
       let replies: Awaited<ReturnType<typeof handleWhatsAppMessage>> = [];
 
       try {
-        if (isMarketingGenerateAction(incoming) && isGeminiConfigured()) {
+        if (shouldShowMarketingProgress(incoming) && isGeminiConfigured()) {
           await sendWhatsAppText(from, "⏳ Gerando seu texto com IA... só um instante!");
         }
 

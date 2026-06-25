@@ -16,13 +16,19 @@ import {
 import { config } from "../config.js";
 import {
   buildMarketingReplies,
-  generateMarketingCopy,
+  focusFromTempData,
   geminiUnavailableMessage,
+  generateMarketingCopy,
   isGeminiConfigured,
   isMarketingAction,
   marketingErrorMessage,
   marketingKindFromAction,
   marketingMenuMessage,
+  marketingPhotoPickerMessage,
+  marketingTopicPickerMessage,
+  resolveMarketingImage,
+  resolveMarketingTopic,
+  type MarketingKind,
 } from "../services/lia-marketing.js";
 import type { IncomingMessage } from "./types.js";
 
@@ -50,6 +56,8 @@ const EDIT_STATES = new Set<string>([
   ChatStates.EDITING_DELETE_PRODUCT_CONFIRM,
   ChatStates.EDITING_YOUTUBE,
   ChatStates.EDITING_INSTAGRAM,
+  ChatStates.MARKETING_PICK_IMAGE,
+  ChatStates.MARKETING_PICK_TOPIC,
   ChatStates.MARKETING_TAGLINE_CONFIRM,
 ]);
 
@@ -100,6 +108,76 @@ export function editMenuMessage(slug: string): WhatsAppOutbound {
   );
 }
 
+async function beginMarketingTopicFlow(
+  phone: string,
+  kind: MarketingKind,
+  tenant: NonNullable<Awaited<ReturnType<typeof loadTenant>>>,
+  extra: Partial<TempData> = {}
+): Promise<WhatsAppOutbound[]> {
+  await prisma.chatState.update({
+    where: { whatsappNumber: phone },
+    data: {
+      currentState: ChatStates.MARKETING_PICK_TOPIC,
+      tempData: { marketingKind: kind, ...extra },
+    },
+  });
+  return [marketingTopicPickerMessage(kind, tenant.products)];
+}
+
+async function generateAndDeliverMarketing(
+  phone: string,
+  tenant: NonNullable<Awaited<ReturnType<typeof loadTenant>>>,
+  tempData: TempData
+): Promise<WhatsAppOutbound[]> {
+  const slug = tenant.slug;
+  const kind = tempData.marketingKind;
+  const focus = focusFromTempData(tempData);
+
+  if (!kind || !focus) {
+    await prisma.chatState.update({
+      where: { whatsappNumber: phone },
+      data: { currentState: ChatStates.CONFIRMED, tempData: {} },
+    });
+    return [textMessage("Fluxo interrompido. Envie *divulgar* para começar de novo.")];
+  }
+
+  if (!isGeminiConfigured()) {
+    return [geminiUnavailableMessage(), editMenuMessage(slug)];
+  }
+
+  try {
+    const copy = await generateMarketingCopy(kind, tenant, config.rootDomain, focus);
+
+    if (kind === "tagline") {
+      await prisma.chatState.update({
+        where: { whatsappNumber: phone },
+        data: {
+          currentState: ChatStates.MARKETING_TAGLINE_CONFIRM,
+          tempData: { suggestedTagline: copy },
+        },
+      });
+      return [
+        textMessage(`✨ Gancho sugerido (${focus.topicLabel}):`),
+        textMessage(copy),
+        buttonsMessage("Quer colocar isso no topo do site?", [...APPLY_TAGLINE, ...CANCEL_EDIT]),
+      ];
+    }
+
+    await prisma.chatState.update({
+      where: { whatsappNumber: phone },
+      data: { currentState: ChatStates.CONFIRMED, tempData: {} },
+    });
+    return buildMarketingReplies(kind, tenant, config.rootDomain, copy, focus);
+  } catch (error) {
+    console.error("[Lia marketing]", error);
+    await prisma.chatState.update({
+      where: { whatsappNumber: phone },
+      data: { currentState: ChatStates.CONFIRMED, tempData: {} },
+    });
+    return [textMessage(marketingErrorMessage(error))];
+  }
+}
+
 async function runMarketingAction(
   phone: string,
   actionId: string,
@@ -118,29 +196,23 @@ async function runMarketingAction(
     return [geminiUnavailableMessage(), editMenuMessage(slug)];
   }
 
-  try {
-    const copy = await generateMarketingCopy(kind, tenant, config.rootDomain);
-
-    if (kind === "tagline") {
-      const line = copy.replace(/^["']|["']$/g, "").trim();
-      await prisma.chatState.update({
-        where: { whatsappNumber: phone },
-        data: {
-          currentState: ChatStates.MARKETING_TAGLINE_CONFIRM,
-          tempData: { suggestedTagline: line },
-        },
-      });
+  if (kind === "post") {
+    const picker = marketingPhotoPickerMessage(tenant);
+    if (!picker) {
       return [
-        textMessage(`✨ *Sugestão de gancho:*\n\n${line}`),
-        buttonsMessage("Quer colocar isso no topo do site?", [...APPLY_TAGLINE, ...CANCEL_EDIT]),
+        textMessage(
+          "Para montar o *post com foto*, cadastre imagens no menu:\n*Imagens → Fotos*"
+        ),
       ];
     }
-
-    return buildMarketingReplies(kind, tenant, config.rootDomain, copy);
-  } catch (error) {
-    console.error("[Lia marketing]", error);
-    return [textMessage(marketingErrorMessage(error))];
+    await prisma.chatState.update({
+      where: { whatsappNumber: phone },
+      data: { currentState: ChatStates.MARKETING_PICK_IMAGE, tempData: { marketingKind: kind } },
+    });
+    return [picker];
   }
+
+  return beginMarketingTopicFlow(phone, kind, tenant);
 }
 
 async function finishEdit(
@@ -330,6 +402,26 @@ export async function handleEditingMessage(
 
   if (isCancel(message)) {
     return cancelEdit(phone, slug);
+  }
+
+  if (
+    currentState === ChatStates.MARKETING_PICK_IMAGE ||
+    currentState === ChatStates.MARKETING_PICK_TOPIC
+  ) {
+    if (isDivulgarTrigger(message)) {
+      await prisma.chatState.update({
+        where: { whatsappNumber: phone },
+        data: { currentState: ChatStates.CONFIRMED, tempData: {} },
+      });
+      return [marketingMenuMessage()];
+    }
+    if (menuTrigger(message)) {
+      await prisma.chatState.update({
+        where: { whatsappNumber: phone },
+        data: { currentState: ChatStates.CONFIRMED, tempData: {} },
+      });
+      return [editMenuMessage(slug)];
+    }
   }
 
   if (currentState === ChatStates.CONFIRMED || currentState === ChatStates.EDITING) {
@@ -626,6 +718,47 @@ export async function handleEditingMessage(
         data: { instagramUrl },
       });
       return finishEdit(phone, slug, "Instagram atualizado!");
+    }
+
+    case ChatStates.MARKETING_PICK_IMAGE: {
+      if (message.type !== "interactive" || !message.buttonId?.startsWith("mkt_img_")) {
+        return [textMessage("Toque em *Ver fotos* e escolha uma imagem, ou envie *cancelar*.")];
+      }
+      const image = resolveMarketingImage(message.buttonId, tenant);
+      if (!image) return [textMessage("Imagem inválida. Tente de novo.")];
+      return beginMarketingTopicFlow(phone, "post", tenant, {
+        marketingKind: "post",
+        marketingImageUrl: image.url,
+        marketingImageLabel: image.label,
+      });
+    }
+
+    case ChatStates.MARKETING_PICK_TOPIC: {
+      if (message.type !== "interactive" || !message.buttonId?.startsWith("mkt_topic_")) {
+        return [textMessage("Toque em *Ver assuntos* e escolha o tema, ou envie *cancelar*.")];
+      }
+      const topic = resolveMarketingTopic(message.buttonId, tenant);
+      if (!topic) return [textMessage("Assunto inválido. Tente de novo.")];
+      await prisma.chatState.update({
+        where: { whatsappNumber: phone },
+        data: {
+          tempData: {
+            ...tempData,
+            marketingTopicKey: topic.topicKey,
+            marketingTopicLabel: topic.topicLabel,
+            marketingProductTitle: topic.productTitle,
+            marketingProductPrice: topic.productPrice,
+          },
+        },
+      });
+      const merged = {
+        ...tempData,
+        marketingTopicKey: topic.topicKey,
+        marketingTopicLabel: topic.topicLabel,
+        marketingProductTitle: topic.productTitle,
+        marketingProductPrice: topic.productPrice,
+      };
+      return generateAndDeliverMarketing(phone, tenant, merged);
     }
 
     case ChatStates.MARKETING_TAGLINE_CONFIRM: {

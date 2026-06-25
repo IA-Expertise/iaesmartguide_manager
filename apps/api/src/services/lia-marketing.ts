@@ -1,12 +1,12 @@
 import type { Tenant, TenantPhoto, TenantProduct } from "@prisma/client";
 import { runGeminiPrompt, isGeminiConfigured } from "./gemini.js";
-import type { WhatsAppOutbound } from "./whatsapp-send.js";
+import type { ListRow, WhatsAppOutbound } from "./whatsapp-send.js";
 import { imageMessage, listMessage, textMessage } from "./whatsapp-send.js";
 
-/** Três ferramentas: post com foto, texto versátil, gancho do site */
 export type MarketingKind = "post" | "share" | "tagline";
 
 const WHATSAPP_CAPTION_MAX = 1024;
+const WHATSAPP_TEXT_SAFE = 1500;
 
 const LIA_SYSTEM = `Você é a Lia, assistente de marketing do IAE Smart Guide para turismo rural e gastronomia no Brasil.
 
@@ -15,13 +15,22 @@ Emojis: use com moderação (2 ou 3 por bloco).
 Idioma: português do Brasil.
 Regras:
 - Entregue APENAS o texto final, pronto para copiar e colar.
-- NUNCA comece com "Aqui está", "Segue" ou explicações sobre o que você fez.
+- NUNCA comece com "Aqui está", "Segue", "Legenda:" ou explicações sobre o que você fez.
 - Não invente preços, produtos ou informações que não estejam no contexto.
 - WhatsApp aceita *negrito* com asteriscos.`;
 
 export interface TenantWithMedia extends Tenant {
   products: TenantProduct[];
   photos: TenantPhoto[];
+}
+
+export interface MarketingFocus {
+  topicKey: string;
+  topicLabel: string;
+  imageUrl?: string;
+  imageLabel?: string;
+  productTitle?: string;
+  productPrice?: string;
 }
 
 export function buildMarketingContext(tenant: TenantWithMedia, rootDomain: string) {
@@ -40,14 +49,36 @@ export function buildMarketingContext(tenant: TenantWithMedia, rootDomain: strin
     instagram: tenant.instagramUrl ?? "(não informado)",
     products:
       latestProducts.length > 0 ? latestProducts.join("\n") : "(nenhuma oferta cadastrada)",
-    hasPhotos: tenant.photos.length > 0,
-    hasLogo: Boolean(tenant.logoUrl),
   };
+}
+
+function focusBlock(focus: MarketingFocus): string {
+  const lines = [
+    `Assunto escolhido: *${focus.topicLabel}*. O texto inteiro deve ser sobre isso.`,
+  ];
+  if (focus.imageLabel) {
+    lines.push(
+      `Imagem do post: ${focus.imageLabel}. Escreva uma legenda que combine com essa foto (sem descrever pixels).`
+    );
+  }
+  if (focus.productTitle) {
+    lines.push(
+      `Destaque principal: *${focus.productTitle}*${focus.productPrice ? ` (${focus.productPrice})` : ""}.`
+    );
+  }
+  if (focus.topicKey === "weekend") {
+    lines.push("Tom de convite para o fim de semana.");
+  }
+  if (focus.topicKey === "place") {
+    lines.push("Destaque a experiência de visitar o local.");
+  }
+  return lines.join("\n");
 }
 
 function promptForKind(
   kind: MarketingKind,
-  ctx: ReturnType<typeof buildMarketingContext>
+  ctx: ReturnType<typeof buildMarketingContext>,
+  focus: MarketingFocus
 ): string {
   const base = `Negócio: ${ctx.businessName}
 Site: ${ctx.siteUrl}
@@ -55,74 +86,182 @@ Gancho atual: ${ctx.tagline}
 Sobre: ${ctx.description}
 Endereço: ${ctx.address}
 Instagram: ${ctx.instagram}
-Ofertas:
-${ctx.products}`;
+Ofertas cadastradas:
+${ctx.products}
+
+${focusBlock(focus)}`;
 
   switch (kind) {
     case "post":
       return `${base}
 
-Crie a LEGENDA de um post para WhatsApp/Instagram anunciando o lugar, neste formato:
+Crie a LEGENDA de um post para WhatsApp/Instagram:
 1. Título chamativo com emoji (use *negrito*)
-2. Uma ou duas frases convidando para visitar no fim de semana
-3. Se houver ofertas no contexto, liste até 3 com emoji, *nome* e preço
-4. CTA final com o link ${ctx.siteUrl}
+2. Uma ou duas frases ligadas ao assunto escolhido
+3. Se for oferta específica, destaque só ela; senão cite até 3 ofertas do contexto
+4. CTA com link ${ctx.siteUrl}
 
-Máximo 900 caracteres. Apenas a legenda, sem aspas.`;
+Entre 400 e 850 caracteres. Só a legenda.`;
     case "share":
       return `${base}
 
-Crie UM texto curto para Status do WhatsApp ou grupos de turismo/ciclismo.
-Tom de dica entre amigos recomendando uma parada. Máximo 380 caracteres.
-Termine com o link ${ctx.siteUrl}. Apenas o texto.`;
+Crie UM texto para Status do WhatsApp ou grupos de turismo.
+Tom de dica entre amigos, focado no assunto escolhido.
+Entre 200 e 450 caracteres. Termine com ${ctx.siteUrl}. Só o texto.`;
     case "tagline":
       return `${base}
 
-Crie UM gancho de atração (máx. 120 caracteres) para o topo do site — deve fazer o turista querer desviar a rota. Apenas o texto, sem aspas.`;
+Crie UM gancho de atração para o topo do site, inspirado no assunto escolhido.
+Entre 60 e 120 caracteres. Deve fazer o turista querer desviar a rota. Só o gancho.`;
   }
 }
 
 function geminiOptionsForKind(kind: MarketingKind) {
   switch (kind) {
     case "post":
-      return { maxOutputTokens: 1536 };
+      return { maxOutputTokens: 2048 };
     case "share":
-      return { maxOutputTokens: 512 };
+      return { maxOutputTokens: 768 };
     case "tagline":
-      return { maxOutputTokens: 128 };
+      return { maxOutputTokens: 256 };
   }
 }
 
-export function cleanMarketingCopy(text: string): string {
-  return text
-    .replace(/^(aqui está[^\n]*\n+)/i, "")
-    .replace(/^(segue[^\n]*\n+)/i, "")
-    .replace(/^["']|["']$/g, "")
-    .trim();
+export function cleanMarketingCopy(text: string, kind: MarketingKind): string {
+  let cleaned = text.trim();
+  cleaned = cleaned.replace(/^```[\w]*\n?/, "").replace(/\n?```$/g, "");
+  cleaned = cleaned.replace(/^(aqui está[^\n]+)\n+/i, "");
+  cleaned = cleaned.replace(/^(segue[^\n]+)\n+/i, "");
+  cleaned = cleaned.replace(/^(legenda|gancho|texto):\s*/i, "");
+
+  if (/^["'].+["']$/s.test(cleaned)) {
+    cleaned = cleaned.slice(1, -1).trim();
+  }
+
+  if (kind === "tagline" && cleaned.length > 140) {
+    const cut = cleaned.lastIndexOf(" ", 120);
+    cleaned = cleaned.slice(0, cut > 40 ? cut : 120).trim();
+  }
+
+  return cleaned.trim();
 }
 
 export async function generateMarketingCopy(
   kind: MarketingKind,
   tenant: TenantWithMedia,
-  rootDomain: string
+  rootDomain: string,
+  focus: MarketingFocus
 ): Promise<string> {
   const ctx = buildMarketingContext(tenant, rootDomain);
   const raw = await runGeminiPrompt(
     LIA_SYSTEM,
-    promptForKind(kind, ctx),
+    promptForKind(kind, ctx, focus),
     geminiOptionsForKind(kind)
   );
-  return cleanMarketingCopy(raw);
+  return cleanMarketingCopy(raw, kind);
 }
 
-export function pickPostImageUrl(tenant: TenantWithMedia): string | null {
-  const gallery = tenant.photos
-    .map((photo) => photo.photoUrl)
-    .find((url) => url.startsWith("http"));
-  if (gallery) return gallery;
+export function listMarketingTopics(products: TenantProduct[]): ListRow[] {
+  const rows: ListRow[] = [
+    { id: "mkt_topic_place", title: "O lugar", description: "Experiência e ambiente" },
+    { id: "mkt_topic_weekend", title: "Fim de semana", description: "Convite pra visitar" },
+  ];
 
-  if (tenant.logoUrl?.startsWith("http")) return tenant.logoUrl;
-  return null;
+  for (const product of products.slice(0, 8)) {
+    if (rows.length >= 10) break;
+    rows.push({
+      id: `mkt_topic_prod_${product.id}`,
+      title: product.title.slice(0, 24),
+      description: (product.price ?? "Destaque da oferta").slice(0, 72),
+    });
+  }
+
+  return rows;
+}
+
+export function marketingPhotoPickerMessage(tenant: TenantWithMedia): WhatsAppOutbound | null {
+  const rows: ListRow[] = [];
+
+  if (tenant.logoUrl?.startsWith("http")) {
+    rows.push({ id: "mkt_img_logo", title: "Logo", description: "Marca do negócio" });
+  }
+
+  tenant.photos.forEach((photo, index) => {
+    if (!photo.photoUrl.startsWith("http")) return;
+    if (rows.length >= 10) return;
+    rows.push({
+      id: `mkt_img_${photo.id}`,
+      title: `Foto ${index + 1}`,
+      description: "Galeria do site",
+    });
+  });
+
+  if (!rows.length) return null;
+
+  return listMessage("Qual imagem usar no post? 📷", "Ver fotos", [
+    { title: "Imagens", rows },
+  ]);
+}
+
+export function marketingTopicPickerMessage(
+  kind: MarketingKind,
+  products: TenantProduct[]
+): WhatsAppOutbound {
+  const intro =
+    kind === "post"
+      ? "Sobre o que é o post? A IA monta o texto em cima disso ✨"
+      : kind === "share"
+        ? "Sobre o que divulgar? Escolha o assunto:"
+        : "Qual ângulo pro gancho do site?";
+
+  return listMessage(intro, "Ver assuntos", [
+    { title: "Assunto", rows: listMarketingTopics(products) },
+  ]);
+}
+
+export function resolveMarketingImage(
+  actionId: string,
+  tenant: TenantWithMedia
+): { url: string; label: string } | null {
+  if (actionId === "mkt_img_logo" && tenant.logoUrl?.startsWith("http")) {
+    return { url: tenant.logoUrl, label: "Logo" };
+  }
+
+  const match = actionId.match(/^mkt_img_(\d+)$/);
+  if (!match) return null;
+
+  const photo = tenant.photos.find((item) => item.id === Number.parseInt(match[1], 10));
+  if (!photo?.photoUrl.startsWith("http")) return null;
+
+  const index = tenant.photos.findIndex((item) => item.id === photo.id) + 1;
+  return { url: photo.photoUrl, label: `Foto ${index}` };
+}
+
+export function resolveMarketingTopic(
+  actionId: string,
+  tenant: TenantWithMedia
+): Omit<MarketingFocus, "imageUrl" | "imageLabel"> | null {
+  if (actionId === "mkt_topic_place") {
+    return { topicKey: "place", topicLabel: "O lugar" };
+  }
+  if (actionId === "mkt_topic_weekend") {
+    return { topicKey: "weekend", topicLabel: "Fim de semana" };
+  }
+
+  const match = actionId.match(/^mkt_topic_prod_(\d+)$/);
+  if (!match) return null;
+
+  const product = tenant.products.find(
+    (item) => item.id === Number.parseInt(match[1], 10)
+  );
+  if (!product) return null;
+
+  return {
+    topicKey: `prod_${product.id}`,
+    topicLabel: product.title,
+    productTitle: product.title,
+    productPrice: product.price ?? undefined,
+  };
 }
 
 export function captionForWhatsApp(caption: string): string {
@@ -132,7 +271,7 @@ export function captionForWhatsApp(caption: string): string {
   return `${caption.slice(0, at).trim()}…`;
 }
 
-export function splitWhatsAppMessages(text: string, maxLen = 3500): string[] {
+export function splitWhatsAppMessages(text: string, maxLen = WHATSAPP_TEXT_SAFE): string[] {
   if (text.length <= maxLen) return [text];
 
   const parts: string[] = [];
@@ -140,9 +279,8 @@ export function splitWhatsAppMessages(text: string, maxLen = 3500): string[] {
 
   while (remaining.length > maxLen) {
     let cut = remaining.lastIndexOf("\n\n", maxLen);
-    if (cut < maxLen * 0.4) {
-      cut = remaining.lastIndexOf("\n", maxLen);
-    }
+    if (cut < maxLen * 0.4) cut = remaining.lastIndexOf("\n", maxLen);
+    if (cut < maxLen * 0.4) cut = remaining.lastIndexOf(" ", maxLen);
     if (cut < maxLen * 0.4) cut = maxLen;
     parts.push(remaining.slice(0, cut).trim());
     remaining = remaining.slice(cut).trim();
@@ -163,12 +301,12 @@ export function marketingMenuMessage(): WhatsAppOutbound {
           {
             id: "lia_post",
             title: "Post com foto",
-            description: "Imagem do site + legenda + link",
+            description: "Escolhe foto + assunto + legenda",
           },
           {
             id: "lia_share",
             title: "Texto pra compartilhar",
-            description: "Status, grupos e WhatsApp",
+            description: "Escolhe assunto e gera o texto",
           },
           {
             id: "lia_tagline",
@@ -213,12 +351,19 @@ export function isMarketingAction(actionId: string): boolean {
   return actionId.startsWith("lia_") || actionId === "open_divulgar";
 }
 
+export function isMarketingPickerAction(actionId: string): boolean {
+  return actionId.startsWith("mkt_img_") || actionId.startsWith("mkt_topic_");
+}
+
+export function isMarketingGenerateAction(actionId: string | undefined): boolean {
+  return Boolean(actionId?.startsWith("mkt_topic_"));
+}
+
 export function marketingKindFromAction(actionId: string): MarketingKind | null {
   const map: Record<string, MarketingKind> = {
     lia_post: "post",
     lia_share: "share",
     lia_tagline: "tagline",
-    // compatibilidade com menu antigo
     lia_kit: "share",
     lia_status: "share",
     lia_instagram: "post",
@@ -232,23 +377,25 @@ export function buildMarketingReplies(
   kind: MarketingKind,
   tenant: TenantWithMedia,
   rootDomain: string,
-  copy: string
+  copy: string,
+  focus: MarketingFocus
 ): WhatsAppOutbound[] {
+  const siteUrl = `https://${tenant.slug}.${rootDomain}`;
+
   if (kind === "post") {
-    const imageUrl = pickPostImageUrl(tenant);
+    const imageUrl = focus.imageUrl;
     if (!imageUrl) {
       return [
         textMessage(
-          "Para montar o *post com foto*, cadastre imagens no menu:\n*Imagens → Fotos*\n\nPor enquanto, use *Texto pra compartilhar*."
+          "Para montar o *post com foto*, cadastre imagens no menu:\n*Imagens → Fotos*"
         ),
       ];
     }
 
     const caption = captionForWhatsApp(copy);
-    const siteUrl = `https://${tenant.slug}.${rootDomain}`;
     return [
       textMessage(
-        `✨ *Post pronto!* Encaminhe a imagem abaixo pros grupos e redes.\n\n📎 Site: ${siteUrl}`
+        `✨ *Post pronto!* (${focus.imageLabel ?? "foto"} · ${focus.topicLabel})\nEncaminhe a imagem abaixo.\n\n📎 ${siteUrl}`
       ),
       imageMessage(imageUrl, caption),
       textMessage("Gostou? Envie *divulgar* para gerar outro."),
@@ -256,15 +403,34 @@ export function buildMarketingReplies(
   }
 
   if (kind === "tagline") {
-    return [textMessage(`✨ *Sugestão de gancho:*\n\n${copy}`)];
+    return [textMessage(copy)];
   }
 
   const chunks = splitWhatsAppMessages(copy);
   return [
-    textMessage("✨ *Texto pra compartilhar* — copie e cole:"),
+    textMessage(`✨ Texto sobre *${focus.topicLabel}* — copie abaixo:`),
     ...chunks.map((chunk) => textMessage(chunk)),
     textMessage("Gostou? Envie *divulgar* para gerar outro."),
   ];
+}
+
+export function focusFromTempData(tempData: {
+  marketingTopicKey?: string;
+  marketingTopicLabel?: string;
+  marketingImageUrl?: string;
+  marketingImageLabel?: string;
+  marketingProductTitle?: string;
+  marketingProductPrice?: string;
+}): MarketingFocus | null {
+  if (!tempData.marketingTopicKey || !tempData.marketingTopicLabel) return null;
+  return {
+    topicKey: tempData.marketingTopicKey,
+    topicLabel: tempData.marketingTopicLabel,
+    imageUrl: tempData.marketingImageUrl,
+    imageLabel: tempData.marketingImageLabel,
+    productTitle: tempData.marketingProductTitle,
+    productPrice: tempData.marketingProductPrice,
+  };
 }
 
 export { isGeminiConfigured };

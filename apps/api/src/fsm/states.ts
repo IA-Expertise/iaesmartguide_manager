@@ -17,6 +17,8 @@ export const ChatStates = {
   EDITING_DELETE_PRODUCT_CONFIRM: "EDITING_DELETE_PRODUCT_CONFIRM",
   EDITING_YOUTUBE: "EDITING_YOUTUBE",
   EDITING_INSTAGRAM: "EDITING_INSTAGRAM",
+  MARKETING_PICK_IMAGE: "MARKETING_PICK_IMAGE",
+  MARKETING_PICK_TOPIC: "MARKETING_PICK_TOPIC",
   MARKETING_TAGLINE_CONFIRM: "MARKETING_TAGLINE_CONFIRM",
   /** @deprecated use EDITING_* states */
   EDITING: "EDITING",
@@ -37,4 +39,11 @@ export interface TempData {
   productImageUrl?: string;
   productIdToDelete?: number;
   suggestedTagline?: string;
+  marketingKind?: "post" | "share" | "tagline";
+  marketingImageUrl?: string;
+  marketingImageLabel?: string;
+  marketingTopicKey?: string;
+  marketingTopicLabel?: string;
+  marketingProductTitle?: string;
+  marketingProductPrice?: string;
 }
