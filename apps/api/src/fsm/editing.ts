@@ -3,6 +3,7 @@ import type { TempData } from "./states.js";
 import { ChatStates } from "./states.js";
 import { persistWhatsAppImage, resolveMediaUrls } from "../services/media.js";
 import { revalidateTenant } from "../services/revalidate.js";
+import { taglineFromDescription } from "../utils/tagline.js";
 import { findTenantByWhatsApp } from "../lib/whatsapp-db.js";
 import { appendPhotoToChatState, MAX_GALLERY_PHOTOS } from "../lib/chat-photos.js";
 import {
@@ -209,9 +210,13 @@ export async function handleEditingMessage(
       if (message.type !== "text" || !message.text?.trim()) {
         return [textMessage("Envie a descrição em texto.")];
       }
+      const description = message.text.trim();
       await prisma.tenant.update({
         where: { id: tenant.id },
-        data: { description: message.text.trim() },
+        data: {
+          description,
+          tagline: taglineFromDescription(description),
+        },
       });
       return finishEdit(phone, slug, "Descrição atualizada!");
     }

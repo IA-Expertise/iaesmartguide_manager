@@ -1,9 +1,11 @@
 export interface TenantPublic {
   slug: string;
   businessName: string;
+  whatsappNumber: string;
   logoUrl: string | null;
   youtubeUrl: string | null;
   description: string | null;
+  tagline: string | null;
   address: string | null;
   isPublished: boolean;
   photos: string[];

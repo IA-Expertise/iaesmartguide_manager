@@ -22,9 +22,11 @@ tenantsRouter.get("/:slug", async (req, res) => {
   res.json({
     slug: tenant.slug,
     businessName: tenant.businessName,
+    whatsappNumber: tenant.whatsappNumber,
     logoUrl: tenant.logoUrl,
     youtubeUrl: tenant.youtubeUrl,
     description: tenant.description,
+    tagline: tenant.tagline,
     address: tenant.address,
     isPublished: tenant.isPublished,
     photos: tenant.photos.map((p) => p.photoUrl),

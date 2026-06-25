@@ -16,6 +16,7 @@ model Tenant {
   logoUrl        String?  @map("logo_url")
   youtubeUrl     String?  @map("youtube_url")
   description    String?
+  tagline        String?  @db.VarChar(200)
   address        String?
   isPublished    Boolean  @default(false) @map("is_published")
   paymentStatus  String   @default("pending") @map("payment_status") @db.VarChar(20)
