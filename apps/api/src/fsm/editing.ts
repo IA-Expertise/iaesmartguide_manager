@@ -271,7 +271,7 @@ async function loadTenant(phone: string) {
     where: { id: base.id },
     include: {
       products: { orderBy: { createdAt: "desc" }, take: 20 },
-      photos: { orderBy: { createdAt: "asc" }, take: 10 },
+      photos: { orderBy: { createdAt: "asc" } },
     },
   });
 }
@@ -722,14 +722,36 @@ export async function handleEditingMessage(
 
     case ChatStates.MARKETING_PICK_IMAGE: {
       if (message.type !== "interactive" || !message.buttonId?.startsWith("mkt_img_")) {
-        return [textMessage("Toque em *Ver fotos* e escolha uma imagem, ou envie *cancelar*.")];
+        return [textMessage("Toque em *Ver imagens* e escolha uma, ou envie *cancelar*.")];
       }
+
+      if (message.buttonId === "mkt_img_next") {
+        const nextPage = (tempData.marketingImagePage ?? 0) + 1;
+        await prisma.chatState.update({
+          where: { whatsappNumber: phone },
+          data: { tempData: { ...tempData, marketingImagePage: nextPage } },
+        });
+        const picker = marketingPhotoPickerMessage(tenant, nextPage);
+        return picker ? [picker] : [textMessage("Não há mais imagens.")];
+      }
+
+      if (message.buttonId === "mkt_img_prev") {
+        const prevPage = Math.max(0, (tempData.marketingImagePage ?? 0) - 1);
+        await prisma.chatState.update({
+          where: { whatsappNumber: phone },
+          data: { tempData: { ...tempData, marketingImagePage: prevPage } },
+        });
+        const picker = marketingPhotoPickerMessage(tenant, prevPage);
+        return picker ? [picker] : [textMessage("Não há imagens anteriores.")];
+      }
+
       const image = resolveMarketingImage(message.buttonId, tenant);
       if (!image) return [textMessage("Imagem inválida. Tente de novo.")];
       return beginMarketingTopicFlow(phone, "post", tenant, {
         marketingKind: "post",
         marketingImageUrl: image.url,
         marketingImageLabel: image.label,
+        marketingImagePage: 0,
       });
     }
 

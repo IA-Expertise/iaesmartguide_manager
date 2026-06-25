@@ -179,7 +179,9 @@ export function listMarketingTopics(products: TenantProduct[]): ListRow[] {
   return rows;
 }
 
-export function marketingPhotoPickerMessage(tenant: TenantWithMedia): WhatsAppOutbound | null {
+const LIST_ROWS_MAX = 10;
+
+function buildMarketingImageRows(tenant: TenantWithMedia): ListRow[] {
   const rows: ListRow[] = [];
 
   if (tenant.logoUrl?.startsWith("http")) {
@@ -188,7 +190,6 @@ export function marketingPhotoPickerMessage(tenant: TenantWithMedia): WhatsAppOu
 
   tenant.photos.forEach((photo, index) => {
     if (!photo.photoUrl.startsWith("http")) return;
-    if (rows.length >= 10) return;
     rows.push({
       id: `mkt_img_${photo.id}`,
       title: `Foto ${index + 1}`,
@@ -196,11 +197,81 @@ export function marketingPhotoPickerMessage(tenant: TenantWithMedia): WhatsAppOu
     });
   });
 
-  if (!rows.length) return null;
+  for (const product of tenant.products) {
+    if (!product.imageUrl?.startsWith("http")) continue;
+    rows.push({
+      id: `mkt_img_prod_${product.id}`,
+      title: product.title.slice(0, 24),
+      description: (product.price ? `Oferta · ${product.price}` : "Foto da oferta").slice(0, 72),
+    });
+  }
 
-  return listMessage("Qual imagem usar no post? 📷", "Ver fotos", [
-    { title: "Imagens", rows },
-  ]);
+  return rows;
+}
+
+function paginateImageRows(rows: ListRow[], page: number): {
+  pageRows: ListRow[];
+  hasNext: boolean;
+  hasPrev: boolean;
+  total: number;
+} {
+  const total = rows.length;
+  const slots = LIST_ROWS_MAX - 1;
+  const offset = page * slots;
+  const chunk = rows.slice(offset, offset + slots);
+  const hasNext = offset + slots < total;
+  const hasPrev = page > 0;
+
+  const pageRows = [...chunk];
+  if (hasNext) {
+    pageRows.push({
+      id: "mkt_img_next",
+      title: "Ver mais imagens",
+      description: `${total - offset - slots} restante(s)`,
+    });
+  } else if (hasPrev) {
+    pageRows.push({
+      id: "mkt_img_prev",
+      title: "Imagens anteriores",
+      description: "Voltar na lista",
+    });
+  }
+
+  return { pageRows, hasNext, hasPrev, total };
+}
+
+export function marketingPhotoPickerMessage(
+  tenant: TenantWithMedia,
+  page = 0
+): WhatsAppOutbound | null {
+  const allRows = buildMarketingImageRows(tenant);
+  if (!allRows.length) return null;
+
+  const { pageRows, total } = paginateImageRows(allRows, page);
+  const galleryCount = tenant.photos.filter((p) => p.photoUrl.startsWith("http")).length;
+  const offerCount = tenant.products.filter((p) => p.imageUrl?.startsWith("http")).length;
+  const hasLogo = tenant.logoUrl?.startsWith("http") ? 1 : 0;
+
+  const body =
+    total <= LIST_ROWS_MAX
+      ? `Qual imagem usar? 📷\n${galleryCount} foto(s) da galeria · ${offerCount} oferta(s) com foto${hasLogo ? " · logo" : ""}`
+      : `Qual imagem usar? 📷 (${page + 1}/${Math.ceil(total / (LIST_ROWS_MAX - 1))}) — ${total} opções no total`;
+
+  const galleryRows = pageRows.filter(
+    (row) => row.id === "mkt_img_logo" || /^mkt_img_\d+$/.test(row.id)
+  );
+  const offerRows = pageRows.filter((row) => row.id.startsWith("mkt_img_prod_"));
+  const navRows = pageRows.filter(
+    (row) => row.id === "mkt_img_next" || row.id === "mkt_img_prev"
+  );
+
+  const sections: Array<{ title: string; rows: ListRow[] }> = [];
+  if (galleryRows.length) sections.push({ title: "Galeria", rows: galleryRows });
+  if (offerRows.length) sections.push({ title: "Ofertas", rows: offerRows });
+  if (navRows.length) sections.push({ title: "Mais", rows: navRows });
+  if (!sections.length) sections.push({ title: "Imagens", rows: pageRows });
+
+  return listMessage(body, "Ver imagens", sections);
 }
 
 export function marketingTopicPickerMessage(
@@ -225,6 +296,17 @@ export function resolveMarketingImage(
 ): { url: string; label: string } | null {
   if (actionId === "mkt_img_logo" && tenant.logoUrl?.startsWith("http")) {
     return { url: tenant.logoUrl, label: "Logo" };
+  }
+
+  const productMatch = actionId.match(/^mkt_img_prod_(\d+)$/);
+  if (productMatch) {
+    const product = tenant.products.find(
+      (item) => item.id === Number.parseInt(productMatch[1], 10)
+    );
+    if (product?.imageUrl?.startsWith("http")) {
+      return { url: product.imageUrl, label: product.title };
+    }
+    return null;
   }
 
   const match = actionId.match(/^mkt_img_(\d+)$/);
@@ -352,7 +434,14 @@ export function isMarketingAction(actionId: string): boolean {
 }
 
 export function isMarketingPickerAction(actionId: string): boolean {
-  return actionId.startsWith("mkt_img_") || actionId.startsWith("mkt_topic_");
+  return (
+    actionId.startsWith("mkt_img_") ||
+    actionId.startsWith("mkt_topic_")
+  );
+}
+
+export function isMarketingImageNavAction(actionId: string): boolean {
+  return actionId === "mkt_img_next" || actionId === "mkt_img_prev";
 }
 
 export function isMarketingGenerateAction(actionId: string | undefined): boolean {

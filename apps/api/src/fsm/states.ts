@@ -46,4 +46,5 @@ export interface TempData {
   marketingTopicLabel?: string;
   marketingProductTitle?: string;
   marketingProductPrice?: string;
+  marketingImagePage?: number;
 }
