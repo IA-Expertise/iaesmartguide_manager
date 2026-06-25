@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { fetchTenant } from "@/lib/api";
+import { themeFromSlug, themeToCssVars, youtubeEmbedId } from "@/lib/theme";
+import { IconBag, IconGallery, IconMapPin, IconPlay, IconSpark } from "./icons";
 import styles from "./site.module.css";
 
 interface PageProps {
@@ -25,62 +27,142 @@ export default async function TenantSitePage({ params }: PageProps) {
 
   if (!tenant) notFound();
 
+  const theme = themeFromSlug(tenant.slug);
+  const cssVars = themeToCssVars(theme);
+  const videoId = tenant.youtubeUrl ? youtubeEmbedId(tenant.youtubeUrl) : null;
+  const hasGallery = tenant.photos.length > 0;
+  const hasProducts = tenant.products.length > 0;
+
   return (
-    <main className={styles.page}>
-      <header className={styles.header}>
-        {tenant.logoUrl && (
-          <img src={tenant.logoUrl} alt={tenant.businessName} className={styles.logo} />
-        )}
-        <h1>{tenant.businessName}</h1>
-        {tenant.description && <p className={styles.description}>{tenant.description}</p>}
-        {tenant.address && <p className={styles.address}>{tenant.address}</p>}
+    <main className={styles.page} style={cssVars}>
+      <header className={styles.hero}>
+        <div className={styles.heroBg} aria-hidden />
+        <div className={styles.heroContent}>
+          <span className={styles.badge}>
+            <IconSpark className={styles.badgeIcon} />
+            Smart Guide
+          </span>
+          {tenant.logoUrl ? (
+            <div className={styles.logoWrap}>
+              <img src={tenant.logoUrl} alt="" className={styles.logo} />
+            </div>
+          ) : (
+            <div className={styles.logoPlaceholder} aria-hidden>
+              {tenant.businessName.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <h1 className={styles.title}>{tenant.businessName}</h1>
+          {tenant.description && <p className={styles.lead}>{tenant.description}</p>}
+          {tenant.address && (
+            <p className={styles.address}>
+              <IconMapPin className={styles.addressIcon} />
+              {tenant.address}
+            </p>
+          )}
+        </div>
       </header>
 
-      {tenant.photos.length > 0 && (
-        <section className={styles.gallery}>
-          <h2>Galeria</h2>
-          <div className={styles.photoGrid}>
-            {tenant.photos.map((url, i) => (
-              <img key={i} src={url} alt={`Foto ${i + 1}`} className={styles.photo} />
-            ))}
-          </div>
-        </section>
-      )}
+      <div className={styles.content}>
+        {hasGallery && (
+          <section className={styles.section} aria-labelledby="gallery-heading">
+            <div className={styles.sectionHead}>
+              <span className={styles.sectionIcon}>
+                <IconGallery />
+              </span>
+              <h2 id="gallery-heading">Galeria</h2>
+            </div>
+            <div className={styles.photoGrid}>
+              {tenant.photos.map((url, i) => (
+                <figure
+                  key={url}
+                  className={`${styles.photoFrame} ${i === 0 ? styles.photoFeatured : ""}`}
+                >
+                  <img src={url} alt={`Foto ${i + 1} de ${tenant.businessName}`} className={styles.photo} />
+                </figure>
+              ))}
+            </div>
+          </section>
+        )}
 
-      {tenant.products.length > 0 && (
-        <section className={styles.products}>
-          <h2>Produtos e ofertas</h2>
-          <ul className={styles.productList}>
-            {tenant.products.map((product) => (
-              <li key={product.id} className={styles.productCard}>
-                {product.imageUrl && (
-                  <img src={product.imageUrl} alt={product.title} className={styles.productImage} />
-                )}
-                <div>
-                  <strong>{product.title}</strong>
-                  {product.price && <span className={styles.price}>{product.price}</span>}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+        {hasProducts && (
+          <section className={styles.section} aria-labelledby="products-heading">
+            <div className={styles.sectionHead}>
+              <span className={styles.sectionIcon}>
+                <IconBag />
+              </span>
+              <h2 id="products-heading">Produtos e ofertas</h2>
+            </div>
+            <ul className={styles.productGrid}>
+              {tenant.products.map((product) => (
+                <li key={product.id} className={styles.productCard}>
+                  <div className={styles.productMedia}>
+                    {product.imageUrl ? (
+                      <img src={product.imageUrl} alt={product.title} className={styles.productImage} />
+                    ) : (
+                      <div className={styles.productImageFallback}>
+                        <IconBag size={28} />
+                      </div>
+                    )}
+                    {product.price && <span className={styles.priceBadge}>{product.price}</span>}
+                  </div>
+                  <div className={styles.productBody}>
+                    <strong className={styles.productTitle}>{product.title}</strong>
+                    {!product.price && <span className={styles.priceInline}>Consulte</span>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-      {tenant.youtubeUrl && (
-        <section className={styles.youtube}>
-          <h2>Vídeo</h2>
-          <a href={tenant.youtubeUrl} target="_blank" rel="noopener noreferrer">
-            Assistir no YouTube
-          </a>
-        </section>
-      )}
+        {tenant.youtubeUrl && (
+          <section className={styles.section} aria-labelledby="video-heading">
+            <div className={styles.sectionHead}>
+              <span className={styles.sectionIcon}>
+                <IconPlay />
+              </span>
+              <h2 id="video-heading">Vídeo</h2>
+            </div>
+            {videoId ? (
+              <div className={styles.videoWrap}>
+                <iframe
+                  src={`https://www.youtube.com/embed/${videoId}`}
+                  title={`Vídeo de ${tenant.businessName}`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className={styles.videoFrame}
+                />
+              </div>
+            ) : (
+              <a
+                href={tenant.youtubeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.youtubeLink}
+              >
+                <IconPlay className={styles.youtubeLinkIcon} />
+                Assistir no YouTube
+              </a>
+            )}
+          </section>
+        )}
+
+        {!hasGallery && !hasProducts && !tenant.youtubeUrl && (
+          <section className={styles.emptyState}>
+            <p>Em breve mais conteúdo sobre {tenant.businessName}.</p>
+          </section>
+        )}
+      </div>
 
       {!tenant.isPublished && (
         <p className={styles.draft}>Rascunho — visível apenas para preview.</p>
       )}
 
       <footer className={styles.footer}>
-        <small>IAE Smart Guide</small>
+        <div className={styles.footerLine} aria-hidden />
+        <small>
+          Mini-site por <strong>IAE Smart Guide</strong>
+        </small>
       </footer>
     </main>
   );

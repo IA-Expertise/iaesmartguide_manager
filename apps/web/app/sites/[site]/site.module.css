@@ -1,106 +1,388 @@
 .page {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 2rem 1.25rem 3rem;
-  font-family: system-ui, -apple-system, sans-serif;
-  color: #1a1a1a;
-  line-height: 1.5;
+  --font-body: var(--font-body, "DM Sans", system-ui, sans-serif);
+  --font-display: var(--font-display, "Fraunces", Georgia, serif);
+  min-height: 100dvh;
+  font-family: var(--font-body);
+  color: #1c1917;
+  line-height: 1.55;
+  background: #faf8f5;
 }
 
-.header {
+/* —— Hero —— */
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: 2.5rem 1.25rem 3rem;
+  color: #fff;
   text-align: center;
-  margin-bottom: 2rem;
+}
+
+.heroBg {
+  position: absolute;
+  inset: 0;
+  background: var(--gradient);
+  z-index: 0;
+}
+
+.heroBg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--hero-glow) 35%, transparent) 0%, transparent 45%),
+    radial-gradient(circle at 80% 60%, rgba(255, 255, 255, 0.08) 0%, transparent 40%);
+}
+
+.heroBg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.12;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+.heroContent {
+  position: relative;
+  z-index: 1;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.85rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+}
+
+.badgeIcon {
+  opacity: 0.95;
+}
+
+.logoWrap {
+  display: inline-flex;
+  padding: 0.35rem;
+  margin-bottom: 1rem;
+  background: #fff;
+  border-radius: 20px;
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.5);
 }
 
 .logo {
+  display: block;
   width: 96px;
   height: 96px;
   object-fit: contain;
-  border-radius: 12px;
-  margin-bottom: 1rem;
+  border-radius: 16px;
 }
 
-.description {
-  color: #444;
-  margin-top: 0.5rem;
+.logoPlaceholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 104px;
+  height: 104px;
+  margin-bottom: 1rem;
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  font-weight: 600;
+  color: var(--accent-dark);
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+}
+
+.title {
+  margin: 0 0 0.65rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 5vw, 2.35rem);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+
+.lead {
+  margin: 0 auto 1rem;
+  max-width: 36ch;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .address {
-  color: #666;
-  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.5rem 1rem;
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
 }
 
-.gallery h2,
-.products h2,
-.youtube h2 {
-  font-size: 1.1rem;
-  margin-bottom: 0.75rem;
+.addressIcon {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  opacity: 0.9;
 }
 
+/* —— Content —— */
+.content {
+  max-width: 960px;
+  margin: -1.5rem auto 0;
+  padding: 0 1rem 2rem;
+  position: relative;
+  z-index: 2;
+}
+
+.section {
+  margin-bottom: 1.5rem;
+  padding: 1.35rem 1.25rem 1.5rem;
+  background: #fff;
+  border-radius: 20px;
+  box-shadow:
+    0 1px 2px rgba(28, 25, 23, 0.04),
+    0 8px 32px rgba(28, 25, 23, 0.06);
+  border: 1px solid rgba(28, 25, 23, 0.06);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 1.15rem;
+}
+
+.sectionIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--accent);
+  background: var(--accent-light);
+  border-radius: 10px;
+}
+
+.sectionHead h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--accent-dark);
+}
+
+/* —— Gallery —— */
 .photoGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.65rem;
+}
+
+@media (min-width: 540px) {
+  .photoGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.photoFrame {
+  margin: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--accent-muted);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.photoFeatured {
+  grid-column: span 2;
+  grid-row: span 1;
+}
+
+@media (min-width: 540px) {
+  .photoFeatured {
+    grid-column: span 2;
+    grid-row: span 2;
+  }
 }
 
 .photo {
+  display: block;
   width: 100%;
-  aspect-ratio: 1;
+  height: 100%;
+  min-height: 140px;
   object-fit: cover;
-  border-radius: 8px;
+  transition: transform 0.35s ease;
 }
 
-.productList {
+.photoFrame:hover .photo {
+  transform: scale(1.04);
+}
+
+/* —— Products —— */
+.productGrid {
   list-style: none;
   padding: 0;
   margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.85rem;
 }
 
 .productCard {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  padding: 0.75rem;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #faf8f5;
+  border: 1px solid rgba(28, 25, 23, 0.07);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.productCard:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(28, 25, 23, 0.1);
+}
+
+.productMedia {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--accent-muted);
 }
 
 .productImage {
-  width: 56px;
-  height: 56px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border-radius: 6px;
 }
 
-.price {
+.productImageFallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--accent);
+  opacity: 0.55;
+}
+
+.priceBadge {
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.5rem;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.productBody {
+  padding: 0.75rem 0.85rem 0.9rem;
+}
+
+.productTitle {
   display: block;
-  color: #2d6a4f;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  color: #1c1917;
+}
+
+.priceInline {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.82rem;
   font-weight: 600;
-  margin-top: 0.15rem;
+  color: var(--accent);
+}
+
+/* —— Video —— */
+.videoWrap {
+  overflow: hidden;
+  border-radius: 14px;
+  background: #000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+}
+
+.videoFrame {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: none;
+}
+
+.youtubeLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #fff;
+  text-decoration: none;
+  background: #c4302b;
+  border-radius: 12px;
+  transition: filter 0.2s ease, transform 0.2s ease;
+}
+
+.youtubeLink:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.youtubeLinkIcon {
+  flex-shrink: 0;
+}
+
+/* —— Misc —— */
+.emptyState {
+  padding: 2rem 1.25rem;
+  text-align: center;
+  color: #78716c;
+  background: #fff;
+  border-radius: 20px;
+  border: 1px dashed rgba(28, 25, 23, 0.12);
 }
 
 .draft {
-  margin-top: 2rem;
-  padding: 0.75rem;
-  background: #fff8e6;
-  border-radius: 8px;
-  font-size: 0.9rem;
+  max-width: 960px;
+  margin: 0 auto 1rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.88rem;
   text-align: center;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 12px;
 }
 
 .footer {
-  margin-top: 3rem;
+  padding: 2rem 1.25rem 2.5rem;
   text-align: center;
-  color: #999;
+  color: #a8a29e;
 }
 
-.youtube {
-  margin-top: 2rem;
+.footerLine {
+  width: 48px;
+  height: 3px;
+  margin: 0 auto 1rem;
+  background: var(--accent-muted);
+  border-radius: 999px;
 }
 
-.youtube a {
-  color: #c4302b;
+.footer strong {
+  color: var(--accent);
+  font-weight: 600;
 }
