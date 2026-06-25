@@ -159,12 +159,49 @@ adminRouter.get("/whatsapp-prepare-test", async (req, res) => {
     res.json({
       ok: true,
       phone,
+      hint: "Use o celular de quem ENVIA a mensagem — não o número business (+55 19 93619-6154).",
       message:
         "Número liberado para teste (pagamento simulado). Envie uma mensagem no WhatsApp para iniciar o cadastro.",
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: "Falha ao preparar teste", detail });
+  } finally {
+    await prisma.$disconnect();
+  }
+});
+
+adminRouter.get("/whatsapp-status", async (req, res) => {
+  if (!checkSecret(req.query.secret as string | undefined)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const prisma = new PrismaClient();
+  try {
+    const phone = normalizePhone(String(req.query.phone ?? ""));
+
+    if (phone) {
+      const [tenant, chatState] = await Promise.all([
+        prisma.tenant.findUnique({ where: { whatsappNumber: phone } }),
+        prisma.chatState.findUnique({ where: { whatsappNumber: phone } }),
+      ]);
+      res.json({ ok: true, phone, tenant, chatState });
+      return;
+    }
+
+    const recent = await prisma.chatState.findMany({
+      orderBy: { updatedAt: "desc" },
+      take: 10,
+    });
+    res.json({
+      ok: true,
+      hint: "Passe ?phone=5511... para ver um número específico. Use o celular pessoal de quem envia mensagens.",
+      recent,
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: "Falha ao consultar status", detail });
   } finally {
     await prisma.$disconnect();
   }

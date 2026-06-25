@@ -83,11 +83,36 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<W
     }
 
     case ChatStates.WAITING_PAYMENT: {
-      replies.push(
-        textMessage(
-          "Aguardando confirmação do pagamento. Assim que for aprovado, você poderá montar seu site por aqui."
-        )
-      );
+      const freshTenant = await prisma.tenant.findUnique({ where: { whatsappNumber: phone } });
+      if (freshTenant?.paymentStatus === "paid") {
+        if (!isPlaceholderSlug(freshTenant.slug)) {
+          await prisma.chatState.update({
+            where: { whatsappNumber: phone },
+            data: { currentState: ChatStates.CONFIRMED },
+          });
+          replies.push(
+            textMessage(
+              `Pagamento confirmado! Seu site está em https://${freshTenant.slug}.${domain}. Envie uma mensagem para atualizar.`
+            )
+          );
+        } else {
+          await prisma.chatState.update({
+            where: { whatsappNumber: phone },
+            data: { currentState: ChatStates.COLLECTING_NAME },
+          });
+          replies.push(
+            textMessage(
+              "Pagamento confirmado! Digite o nome comercial do seu local (Ex: Adega do Toninho)."
+            )
+          );
+        }
+      } else {
+        replies.push(
+          textMessage(
+            "Aguardando confirmação do pagamento. Assim que for aprovado, você poderá montar seu site por aqui."
+          )
+        );
+      }
       break;
     }
 

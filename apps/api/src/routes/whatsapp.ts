@@ -56,6 +56,7 @@ whatsappRouter.post("/", async (req, res) => {
     if (!message) return;
 
     const from = message.from as string;
+    console.log(`[WhatsApp] mensagem de ${from} (phone_number_id=${value?.metadata?.phone_number_id ?? "?"})`);
     let incoming: Parameters<typeof handleWhatsAppMessage>[0];
 
     if (message.type === "text") {
