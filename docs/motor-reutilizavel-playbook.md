@@ -315,7 +315,7 @@ Itens discutidos mas **não implementados** — candidatos ao playbook v2:
 - [ ] Assunto livre (texto) no marketing
 - [ ] Editar oferta (hoje só add/delete)
 - [ ] Painel web OTP (Fase 6)
-- [ ] Asaas / `WHATSAPP_REQUIRE_PAYMENT`
+- [x] Planos Free / Premium + limites (§13) — Asaas checkout link manual
 - [ ] PWA nos mini-sites
 - [ ] Lembretes proativos (ex.: sexta-feira)
 - [ ] Templates sem IA (fallback)
@@ -344,4 +344,63 @@ _Use esta seção para anotar feedback dos 3 amigos e de produção._
 
 ---
 
-*Mantenha este arquivo atualizado a cada projeto derivado. Uma linha na tabela §10 vale mais que refatorar no escuro.*
+## 13. Planos Free / Premium (IAExpertise Smart Guide)
+
+Modelo freemium acordado — **implementado no código** (`apps/api/src/services/plan.ts`).
+
+### GRÁTIS
+
+| Regra | Detalhe |
+|--------|---------|
+| Site | Completo, no ar |
+| IA (Gemini) | **Não** — zero custo |
+| Marketing (`divulgar`) | Bloqueado + pitch Premium |
+| Propaganda | Bloco discreto no rodapé do site |
+| Ofertas | Máximo **4** |
+| Trial Premium | **Não** |
+
+**Edição — duas fases**
+
+1. **Ajuste inicial:** **2 manutenções** após o 1º site publicado (1 publicação = 1 crédito; vários campos na mesma sessão contam 1).
+2. **Depois:** **1 manutenção por mês** (calendário `YYYY-MM`).
+
+A Lia informa sempre quantos ajustes restam.
+
+### PREMIUM — R$ 49,90/mês
+
+| Regra | Detalhe |
+|--------|---------|
+| Site | Sem bloco de propaganda |
+| Edição | Ilimitada |
+| Marketing | Lia + Gemini |
+| Ofertas | Sem limite prático |
+| Cobrança | Recorrente Asaas |
+| Inadimplência | Avisos até **15 dias** → downgrade automático para free (site e dados permanecem) |
+
+### Campos no banco (`Tenant`)
+
+- `plan`: `free` \| `premium`
+- `onboardingAdjustmentsUsed`
+- `maintenanceCreditsUsed` + `maintenanceCreditsPeriod`
+- `premiumOverdueSince` (grace 15 dias)
+
+### Variáveis de ambiente
+
+- `PREMIUM_UPGRADE_URL` — link Asaas checkout
+- `PREMIUM_PRICE_LABEL` — ex.: `R$ 49,90`
+- `LIA_WHATSAPP_NUMBER` — CTA no banner do site
+- `NEXT_PUBLIC_LIA_WHATSAPP` — mesmo número no web
+
+### Tabela ação × plano
+
+| Ação | Free (ajuste inicial) | Free (mensal) | Premium |
+|------|------------------------|---------------|---------|
+| Site público | Sim | Sim | Sim |
+| Banner IAE | Sim | Sim | Não |
+| Publicar alterações | 2 créditos | 1×/mês | Ilimitado |
+| Ofertas (máx.) | 4 | 4 | Ilimitado |
+| `divulgar` | Não | Não | Sim |
+
+---
+
+*Mantenha este arquivo atualizado a cada projeto derivado. Uma linha na tabela §11 vale mais que refatorar no escuro.*

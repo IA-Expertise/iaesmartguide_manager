@@ -66,9 +66,10 @@ export async function prepareWhatsAppTestUser(
         ownerName: "Teste",
         businessName: "Pendente",
         slug: `pending-${variant.slice(-8)}`,
+        plan: "premium",
         paymentStatus: "paid",
       },
-      update: { paymentStatus: "paid" },
+      update: { plan: "premium", paymentStatus: "paid" },
     });
   }
 

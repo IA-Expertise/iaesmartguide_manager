@@ -8,6 +8,7 @@ import { PhotoGallery } from "./photo-gallery";
 import { ProductList } from "./product-list";
 import { StickyActions } from "./sticky-actions";
 import { WeatherWidget } from "./weather-widget";
+import { AcquisitionBanner } from "./acquisition-banner";
 import styles from "./site.module.css";
 
 interface PageProps {
@@ -156,6 +157,11 @@ export default async function TenantSitePage({ params }: PageProps) {
             <IconMapPin className={styles.footerAddressIcon} aria-hidden />
             <span>{tenant.address}</span>
           </p>
+        )}
+        {tenant.plan === "free" && (
+          <div className={styles.acquisitionWrap}>
+            <AcquisitionBanner />
+          </div>
         )}
         <div className={styles.footerLine} aria-hidden />
         <small>Mini-site criado por Eduardo Sona para IAE Smart Guide</small>

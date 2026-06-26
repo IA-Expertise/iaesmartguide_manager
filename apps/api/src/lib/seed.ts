@@ -19,6 +19,7 @@ export async function runSeed(): Promise<{ created: boolean; slug: string }> {
         description: "Vinhos e queijos artesanais da serra.",
         address: "Estrada Rural, km 12 — Serra da Mantiqueira",
         isPublished: true,
+        plan: "premium",
         paymentStatus: "paid",
         products: {
           create: [

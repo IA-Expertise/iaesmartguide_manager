@@ -14,6 +14,7 @@ import { appendPhotoToChatState, MAX_GALLERY_PHOTOS } from "../lib/chat-photos.j
 import { slugify } from "../utils/slugify.js";
 import { config } from "../config.js";
 import { editMenuMessage, handleEditingMessage, isEditingState } from "./editing.js";
+import { isPremium, onboardingWelcomeMessages } from "../services/plan.js";
 import type { IncomingMessage } from "./types.js";
 
 export type { IncomingMessage } from "./types.js";
@@ -23,7 +24,7 @@ const SKIP_YOUTUBE = [{ id: "skip_youtube", title: "Pular" }];
 
 function canStartOnboarding(tenant: Awaited<ReturnType<typeof findTenantByWhatsApp>>): boolean {
   if (!config.whatsapp.requirePayment) return true;
-  return tenant?.paymentStatus === "paid";
+  return Boolean(tenant && isPremium(tenant));
 }
 
 async function beginOnboarding(
@@ -38,7 +39,7 @@ async function beginOnboarding(
     });
     return [
       textMessage(`Olá! Seu site está ativo em https://${tenant.slug}.${domain}.`),
-      editMenuMessage(tenant.slug),
+      editMenuMessage(tenant.slug, tenant),
     ];
   }
 
@@ -239,7 +240,8 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<W
           slug,
           logoUrl,
           youtubeUrl: tempData.youtubeUrl ?? undefined,
-          paymentStatus: "paid",
+          plan: "free",
+          paymentStatus: "active",
           isPublished: true,
         },
         update: {
@@ -266,12 +268,18 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<W
       });
 
       replies.push(textMessage(`Seu site está pronto! Acesse: https://${slug}.${domain}`));
-      replies.push(
-        textMessage(
-          "Dica da Lia: envie *divulgar* que eu monto textos pra Status, Instagram e grupos com IA ✨"
-        )
-      );
-      replies.push(editMenuMessage(slug));
+      if (isPremium(saved)) {
+        replies.push(
+          textMessage(
+            "Dica da Lia: envie *divulgar* que eu monto textos pra Status, Instagram e grupos com IA ✨"
+          )
+        );
+      } else {
+        for (const msg of onboardingWelcomeMessages()) {
+          replies.push(textMessage(msg));
+        }
+      }
+      replies.push(editMenuMessage(slug, saved));
       break;
     }
 

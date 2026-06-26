@@ -9,6 +9,7 @@ export interface TenantPublic {
   tagline: string | null;
   address: string | null;
   isPublished: boolean;
+  plan: "free" | "premium";
   photos: string[];
   products: Array<{
     id: number;

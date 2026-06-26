@@ -30,6 +30,7 @@ tenantsRouter.get("/:slug", async (req, res) => {
     tagline: tenant.tagline,
     address: tenant.address,
     isPublished: tenant.isPublished,
+    plan: tenant.plan,
     photos: tenant.photos.map((p) => p.photoUrl),
     products: tenant.products.map((p) => ({
       id: p.id,

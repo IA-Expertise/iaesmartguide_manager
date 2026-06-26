@@ -8,21 +8,26 @@ datasource db {
 }
 
 model Tenant {
-  id             Int      @id @default(autoincrement())
-  ownerName      String   @map("owner_name") @db.VarChar(100)
-  whatsappNumber String   @unique @map("whatsapp_number") @db.VarChar(20)
-  businessName   String   @map("business_name") @db.VarChar(100)
-  slug           String   @unique @db.VarChar(50)
-  logoUrl        String?  @map("logo_url")
-  youtubeUrl     String?  @map("youtube_url")
-  instagramUrl   String?  @map("instagram_url")
-  description    String?
-  tagline        String?  @db.VarChar(200)
-  address        String?
-  isPublished    Boolean  @default(false) @map("is_published")
-  paymentStatus  String   @default("pending") @map("payment_status") @db.VarChar(20)
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id                       Int       @id @default(autoincrement())
+  ownerName                String    @map("owner_name") @db.VarChar(100)
+  whatsappNumber           String    @unique @map("whatsapp_number") @db.VarChar(20)
+  businessName             String    @map("business_name") @db.VarChar(100)
+  slug                     String    @unique @db.VarChar(50)
+  logoUrl                  String?   @map("logo_url")
+  youtubeUrl               String?   @map("youtube_url")
+  instagramUrl             String?   @map("instagram_url")
+  description              String?
+  tagline                  String?   @db.VarChar(200)
+  address                  String?
+  isPublished              Boolean   @default(false) @map("is_published")
+  plan                     String    @default("free") @db.VarChar(20)
+  onboardingAdjustmentsUsed Int      @default(0) @map("onboarding_adjustments_used")
+  maintenanceCreditsUsed   Int       @default(0) @map("maintenance_credits_used")
+  maintenanceCreditsPeriod String?   @map("maintenance_credits_period") @db.VarChar(7)
+  premiumOverdueSince      DateTime? @map("premium_overdue_since")
+  paymentStatus            String    @default("active") @map("payment_status") @db.VarChar(20)
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
 
   photos   TenantPhoto[]
   products TenantProduct[]

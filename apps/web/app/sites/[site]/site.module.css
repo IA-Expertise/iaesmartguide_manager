@@ -603,6 +603,30 @@
   border-radius: 999px;
 }
 
+.acquisitionWrap {
+  width: 100%;
+  max-width: 22rem;
+  margin: 0.75rem auto 1rem;
+}
+
+.acquisition {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #78716c;
+  text-align: center;
+  background: #fafaf9;
+  border-radius: 10px;
+}
+
+.acquisition a {
+  color: #57534e;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .footer strong {
   color: var(--accent);
   font-weight: 600;

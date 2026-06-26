@@ -30,6 +30,16 @@ import {
   resolveMarketingTopic,
   type MarketingKind,
 } from "../services/lia-marketing.js";
+import {
+  applyPremiumDowngradeIfNeeded,
+  canAddProduct,
+  canPublishMaintenance,
+  consumeMaintenanceCredit,
+  isPremium,
+  maintenanceHintForMenu,
+  maintenanceStatusUserMessage,
+  premiumPitchMessage,
+} from "../services/plan.js";
 import type { IncomingMessage } from "./types.js";
 
 const APPLY_TAGLINE = [{ id: "apply_tagline", title: "Usar no site" }];
@@ -65,10 +75,20 @@ export function isEditingState(state: string): boolean {
   return EDIT_STATES.has(state);
 }
 
-export function editMenuMessage(slug: string): WhatsAppOutbound {
+export function editMenuMessage(
+  slug: string,
+  tenant?: {
+    plan: string;
+    onboardingAdjustmentsUsed: number;
+    maintenanceCreditsUsed: number;
+    maintenanceCreditsPeriod: string | null;
+    premiumOverdueSince: Date | null;
+  }
+): WhatsAppOutbound {
   const domain = config.rootDomain;
+  const planHint = tenant ? `\n_${maintenanceHintForMenu(tenant)}_` : "";
   return listMessage(
-    `Seu site: https://${slug}.${domain}\n\nEscolha o que deseja atualizar:`,
+    `Seu site: https://${slug}.${domain}${planHint}\n\nEscolha o que deseja atualizar:`,
     "Ver opções",
     [
       {
@@ -141,8 +161,19 @@ async function generateAndDeliverMarketing(
     return [textMessage("Fluxo interrompido. Envie *divulgar* para começar de novo.")];
   }
 
+  if (!isPremium(tenant)) {
+    await prisma.chatState.update({
+      where: { whatsappNumber: phone },
+      data: { currentState: ChatStates.CONFIRMED, tempData: {} },
+    });
+    return [
+      textMessage(premiumPitchMessage("marketing")),
+      editMenuMessage(slug, tenant),
+    ];
+  }
+
   if (!isGeminiConfigured()) {
-    return [geminiUnavailableMessage(), editMenuMessage(slug)];
+    return [geminiUnavailableMessage(), editMenuMessage(slug, tenant)];
   }
 
   try {
@@ -184,16 +215,25 @@ async function runMarketingAction(
   tenant: NonNullable<Awaited<ReturnType<typeof loadTenant>>>
 ): Promise<WhatsAppOutbound[]> {
   const slug = tenant.slug;
+  const fresh = (await refreshTenant(phone)) ?? tenant;
+
+  if (!isPremium(fresh)) {
+    return [
+      textMessage(premiumPitchMessage("marketing")),
+      editMenuMessage(slug, fresh),
+    ];
+  }
+
   const kind = marketingKindFromAction(actionId);
 
   if (actionId === "open_divulgar") {
     return [marketingMenuMessage()];
   }
 
-  if (!kind) return [textMessage("Opção inválida."), editMenuMessage(slug)];
+  if (!kind) return [textMessage("Opção inválida."), editMenuMessage(slug, fresh)];
 
   if (!isGeminiConfigured()) {
-    return [geminiUnavailableMessage(), editMenuMessage(slug)];
+    return [geminiUnavailableMessage(), editMenuMessage(slug, fresh)];
   }
 
   if (kind === "post") {
@@ -215,17 +255,44 @@ async function runMarketingAction(
   return beginMarketingTopicFlow(phone, kind, tenant);
 }
 
+async function refreshTenant(phone: string) {
+  const tenant = await loadTenant(phone);
+  if (!tenant) return null;
+  await applyPremiumDowngradeIfNeeded(prisma, tenant);
+  return loadTenant(phone);
+}
+
 async function finishEdit(
   phone: string,
   slug: string,
   successText: string
 ): Promise<WhatsAppOutbound[]> {
+  const tenant = await refreshTenant(phone);
+  if (!tenant) return [textMessage("Site não encontrado.")];
+
+  if (!canPublishMaintenance(tenant)) {
+    return [
+      textMessage(
+        `${premiumPitchMessage("maintenance")}\n\nNenhuma alteração foi publicada.`
+      ),
+      editMenuMessage(slug, tenant),
+    ];
+  }
+
+  await consumeMaintenanceCredit(prisma, tenant);
   await revalidateTenant(slug);
   await prisma.chatState.update({
     where: { whatsappNumber: phone },
     data: { currentState: ChatStates.CONFIRMED, tempData: {} },
   });
-  return [textMessage(`${successText}\n\nAlterações publicadas no site.`), editMenuMessage(slug)];
+
+  const updated = await loadTenant(phone);
+  const statusLine = updated ? maintenanceStatusUserMessage(updated) : "";
+
+  return [
+    textMessage(`${successText}\n\nAlterações publicadas no site.${statusLine}`),
+    editMenuMessage(slug, updated ?? tenant),
+  ];
 }
 
 async function cancelEdit(phone: string, slug: string): Promise<WhatsAppOutbound[]> {
@@ -233,7 +300,8 @@ async function cancelEdit(phone: string, slug: string): Promise<WhatsAppOutbound
     where: { whatsappNumber: phone },
     data: { currentState: ChatStates.CONFIRMED, tempData: {} },
   });
-  return [textMessage("Edição cancelada."), editMenuMessage(slug)];
+  const tenant = await loadTenant(phone);
+  return [textMessage("Edição cancelada."), editMenuMessage(slug, tenant ?? undefined)];
 }
 
 function isCancel(message: IncomingMessage): boolean {
@@ -343,18 +411,27 @@ async function handleMenuAction(
           [...ADVANCE_PHOTOS, ...CANCEL_EDIT]
         ),
       ];
-    case "add_product":
+    case "add_product": {
+      const withProducts = await refreshTenant(phone);
+      if (!withProducts) return [textMessage("Site não encontrado.")];
+      if (!canAddProduct(withProducts, withProducts.products.length)) {
+        return [
+          textMessage(premiumPitchMessage("products")),
+          editMenuMessage(slug, withProducts),
+        ];
+      }
       await prisma.chatState.update({
         where: { whatsappNumber: phone },
         data: { currentState: ChatStates.EDITING_PRODUCT_TITLE, tempData: {} },
       });
       return [buttonsMessage("Qual o nome do produto ou oferta?", CANCEL_EDIT)];
+    }
     case "delete_product": {
       const withProducts = await loadTenant(phone);
       if (!withProducts?.products.length) {
         return [
           textMessage("Você ainda não tem ofertas cadastradas."),
-          editMenuMessage(slug),
+          editMenuMessage(slug, withProducts ?? undefined),
         ];
       }
       await prisma.chatState.update({
@@ -398,7 +475,9 @@ export async function handleEditingMessage(
     return [textMessage("Site não encontrado. Envie uma mensagem para começar o cadastro.")];
   }
 
-  const slug = tenant.slug;
+  await applyPremiumDowngradeIfNeeded(prisma, tenant);
+  const activeTenant = (await loadTenant(phone)) ?? tenant;
+  const slug = activeTenant.slug;
 
   if (isCancel(message)) {
     return cancelEdit(phone, slug);
@@ -420,7 +499,7 @@ export async function handleEditingMessage(
         where: { whatsappNumber: phone },
         data: { currentState: ChatStates.CONFIRMED, tempData: {} },
       });
-      return [editMenuMessage(slug)];
+      return [editMenuMessage(slug, activeTenant)];
     }
   }
 
@@ -430,14 +509,20 @@ export async function handleEditingMessage(
       if (action) return action;
     }
     if (isDivulgarTrigger(message)) {
+      if (!isPremium(activeTenant)) {
+        return [
+          textMessage(premiumPitchMessage("marketing")),
+          editMenuMessage(slug, activeTenant),
+        ];
+      }
       return [marketingMenuMessage()];
     }
     if (menuTrigger(message)) {
-      return [editMenuMessage(slug)];
+      return [editMenuMessage(slug, activeTenant)];
     }
     return [
       textMessage("Toque em *Ver opções* no menu ou envie *menu* para editar seu site."),
-      editMenuMessage(slug),
+      editMenuMessage(slug, activeTenant),
     ];
   }
 
@@ -448,7 +533,7 @@ export async function handleEditingMessage(
       }
       const description = message.text.trim();
       await prisma.tenant.update({
-        where: { id: tenant.id },
+        where: { id: activeTenant.id },
         data: {
           description,
           tagline: taglineFromDescription(description),
@@ -462,7 +547,7 @@ export async function handleEditingMessage(
         return [textMessage("Envie o endereço em texto.")];
       }
       await prisma.tenant.update({
-        where: { id: tenant.id },
+        where: { id: activeTenant.id },
         data: { address: message.text.trim() },
       });
       return finishEdit(phone, slug, "Endereço atualizado!");
@@ -479,7 +564,7 @@ export async function handleEditingMessage(
       try {
         const logoUrl = await persistWhatsAppImage(message.imageId, slug, "logo");
         await prisma.tenant.update({
-          where: { id: tenant.id },
+          where: { id: activeTenant.id },
           data: { logoUrl },
         });
         return finishEdit(phone, slug, "Logo atualizado!");
@@ -497,9 +582,9 @@ export async function handleEditingMessage(
           return [textMessage("Envie pelo menos uma foto ou toque em Cancelar.")];
         }
         const resolved = await resolveMediaUrls(photos, slug);
-        await prisma.tenantPhoto.deleteMany({ where: { tenantId: tenant.id } });
+        await prisma.tenantPhoto.deleteMany({ where: { tenantId: activeTenant.id } });
         await prisma.tenantPhoto.createMany({
-          data: resolved.map((photoUrl) => ({ tenantId: tenant.id, photoUrl })),
+          data: resolved.map((photoUrl) => ({ tenantId: activeTenant.id, photoUrl })),
         });
         return finishEdit(phone, slug, `Galeria atualizada com ${resolved.length} foto(s)!`);
       }
@@ -606,7 +691,7 @@ export async function handleEditingMessage(
       const title = tempData.productTitle!;
       await prisma.tenantProduct.create({
         data: {
-          tenantId: tenant.id,
+          tenantId: activeTenant.id,
           title: title.slice(0, 100),
           price: tempData.productPrice ?? undefined,
           imageUrl,
@@ -618,9 +703,9 @@ export async function handleEditingMessage(
     case ChatStates.EDITING_DELETE_PRODUCT: {
       if (message.type === "interactive" && message.buttonId?.startsWith("del_prod_")) {
         const productId = Number.parseInt(message.buttonId.replace("del_prod_", ""), 10);
-        const product = tenant.products.find((p) => p.id === productId);
+        const product = activeTenant.products.find((p) => p.id === productId);
         if (!product) {
-          return [textMessage("Oferta não encontrada."), editMenuMessage(slug)];
+          return [textMessage("Oferta não encontrada."), editMenuMessage(slug, activeTenant)];
         }
         await prisma.chatState.update({
           where: { whatsappNumber: phone },
@@ -638,14 +723,14 @@ export async function handleEditingMessage(
         ];
       }
       if (menuTrigger(message)) {
-        return [editMenuMessage(slug)];
+        return [editMenuMessage(slug, activeTenant)];
       }
-      if (!tenant.products.length) {
-        return [textMessage("Nenhuma oferta para remover."), editMenuMessage(slug)];
+      if (!activeTenant.products.length) {
+        return [textMessage("Nenhuma oferta para remover."), editMenuMessage(slug, activeTenant)];
       }
       return [
         textMessage("Toque em *Ver ofertas* e escolha qual remover."),
-        productDeleteListMessage(tenant.products),
+        productDeleteListMessage(activeTenant.products),
       ];
     }
 
@@ -655,12 +740,12 @@ export async function handleEditingMessage(
         if (!productId) {
           return cancelEdit(phone, slug);
         }
-        const product = tenant.products.find((p) => p.id === productId);
+        const product = activeTenant.products.find((p) => p.id === productId);
         const deleted = await prisma.tenantProduct.deleteMany({
-          where: { id: productId, tenantId: tenant.id },
+          where: { id: productId, tenantId: activeTenant.id },
         });
         if (!deleted.count) {
-          return [textMessage("Oferta não encontrada ou já foi removida."), editMenuMessage(slug)];
+          return [textMessage("Oferta não encontrada ou já foi removida."), editMenuMessage(slug, activeTenant)];
         }
         const name = product?.title ?? "Oferta";
         return finishEdit(phone, slug, `"${name}" removida!`);
@@ -685,7 +770,7 @@ export async function handleEditingMessage(
         ];
       }
       await prisma.tenant.update({
-        where: { id: tenant.id },
+        where: { id: activeTenant.id },
         data: { youtubeUrl: youtubeUrl ?? null },
       });
       return finishEdit(phone, slug, youtubeUrl ? "Link do YouTube atualizado!" : "YouTube removido.");
@@ -694,7 +779,7 @@ export async function handleEditingMessage(
     case ChatStates.EDITING_INSTAGRAM: {
       if (message.type === "interactive" && message.buttonId === "skip_instagram") {
         await prisma.tenant.update({
-          where: { id: tenant.id },
+          where: { id: activeTenant.id },
           data: { instagramUrl: null },
         });
         return finishEdit(phone, slug, "Instagram removido.");
@@ -714,7 +799,7 @@ export async function handleEditingMessage(
         ];
       }
       await prisma.tenant.update({
-        where: { id: tenant.id },
+        where: { id: activeTenant.id },
         data: { instagramUrl },
       });
       return finishEdit(phone, slug, "Instagram atualizado!");
@@ -788,7 +873,7 @@ export async function handleEditingMessage(
         const line = tempData.suggestedTagline?.trim();
         if (!line) return cancelEdit(phone, slug);
         await prisma.tenant.update({
-          where: { id: tenant.id },
+          where: { id: activeTenant.id },
           data: { tagline: line },
         });
         return finishEdit(phone, slug, "Gancho publicado no site! 🎉");
@@ -797,10 +882,10 @@ export async function handleEditingMessage(
         where: { whatsappNumber: phone },
         data: { currentState: ChatStates.CONFIRMED, tempData: {} },
       });
-      return [textMessage("Beleza! O texto ficou só com você."), editMenuMessage(slug)];
+      return [textMessage("Beleza! O texto ficou só com você."), editMenuMessage(slug, activeTenant)];
     }
 
     default:
-      return [editMenuMessage(slug)];
+      return [editMenuMessage(slug, activeTenant)];
   }
 }
