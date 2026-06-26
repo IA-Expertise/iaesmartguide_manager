@@ -423,7 +423,7 @@ Painel **só para o operador** (não é dashboard do cliente). Implementado em `
 | Bloco | Conteúdo |
 |-------|----------|
 | Resumo | Total, no ar, em cadastro, free, premium |
-| Lista | Nome, slug, plano, status, estado da Lia, data, links Site + WhatsApp |
+| Lista | Nome, slug, plano, status, estado da Lia, data, links Site + WhatsApp + **Remover** |
 
 ### Status do cliente
 

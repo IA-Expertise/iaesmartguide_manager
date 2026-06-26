@@ -115,3 +115,32 @@ opsRouter.get("/tenants", async (_req, res) => {
     res.status(500).json({ error: "Internal error" });
   }
 });
+
+opsRouter.delete("/tenants/:id", async (req, res) => {
+  const id = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "ID inválido" });
+    return;
+  }
+
+  try {
+    const tenant = await prisma.tenant.findUnique({ where: { id } });
+    if (!tenant) {
+      res.status(404).json({ error: "Cliente não encontrado" });
+      return;
+    }
+
+    await prisma.$transaction([
+      prisma.chatState.deleteMany({ where: { whatsappNumber: tenant.whatsappNumber } }),
+      prisma.authCode.deleteMany({ where: { whatsappNumber: tenant.whatsappNumber } }),
+      prisma.payment.updateMany({ where: { tenantId: id }, data: { tenantId: null } }),
+      prisma.tenant.delete({ where: { id } }),
+    ]);
+
+    console.log(`[ops] tenant removido id=${id} slug=${tenant.slug}`);
+    res.json({ ok: true, slug: tenant.slug });
+  } catch (error) {
+    console.error("[ops/delete]", error);
+    res.status(500).json({ error: "Não foi possível remover" });
+  }
+});
