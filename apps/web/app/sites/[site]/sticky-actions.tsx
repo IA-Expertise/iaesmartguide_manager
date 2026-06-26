@@ -42,7 +42,7 @@ export function StickyActions({ businessName, address, whatsappNumber }: StickyA
           rel="noopener noreferrer"
         >
           <IconWhatsApp size={18} />
-          <span>WhatsApp</span>
+          <span>Falar no WhatsApp</span>
         </a>
       )}
     </div>

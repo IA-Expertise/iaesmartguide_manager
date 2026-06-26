@@ -38,27 +38,72 @@ export function PhotoGallery({ photos, businessName }: PhotoGalleryProps) {
     };
   }, [openIndex, close, goPrev, goNext]);
 
+  if (!photos.length) return null;
+
+  const hero = photos[0];
+  const grid = photos.slice(1, 5);
+  const extra = photos.slice(5);
+
   return (
     <>
-      <p className={styles.scrollHint}>Deslize para ver as fotos · toque para ampliar</p>
-      <div className={styles.photoStrip}>
-        {photos.map((url, i) => (
-          <figure key={url} className={styles.photoFrame}>
+      <figure className={styles.heroFigure}>
+        <button
+          type="button"
+          className={styles.heroButton}
+          onClick={() => setOpenIndex(0)}
+          aria-label="Ampliar foto principal"
+        >
+          <img
+            src={hero}
+            alt={`${businessName} — foto principal`}
+            className={styles.heroImage}
+          />
+        </button>
+      </figure>
+
+      {grid.length > 0 && (
+        <div className={styles.featureGrid} aria-label="Galeria de fotos">
+          {grid.map((url, i) => (
             <button
+              key={url}
               type="button"
-              className={styles.photoButton}
-              onClick={() => setOpenIndex(i)}
-              aria-label={`Ampliar foto ${i + 1} de ${photos.length}`}
+              className={styles.featureCell}
+              onClick={() => setOpenIndex(i + 1)}
+              aria-label={`Ampliar foto ${i + 2} de ${photos.length}`}
             >
               <img
                 src={url}
-                alt={`Foto ${i + 1} de ${businessName}`}
-                className={styles.photo}
+                alt={`Foto ${i + 2} de ${businessName}`}
+                className={styles.featureImage}
               />
             </button>
-          </figure>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
+
+      {extra.length > 0 && (
+        <>
+          <p className={styles.scrollHint}>Mais fotos — deslize para ver</p>
+          <div className={styles.photoStrip}>
+            {extra.map((url, i) => (
+              <figure key={url} className={styles.photoFrame}>
+                <button
+                  type="button"
+                  className={styles.photoButton}
+                  onClick={() => setOpenIndex(i + 5)}
+                  aria-label={`Ampliar foto ${i + 6} de ${photos.length}`}
+                >
+                  <img
+                    src={url}
+                    alt={`Foto ${i + 6} de ${businessName}`}
+                    className={styles.photo}
+                  />
+                </button>
+              </figure>
+            ))}
+          </div>
+        </>
+      )}
 
       {openIndex !== null && (
         <div

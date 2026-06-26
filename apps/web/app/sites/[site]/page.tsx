@@ -3,12 +3,13 @@ import { notFound } from "next/navigation";
 import { fetchTenant } from "@/lib/api";
 import { introBody, resolveHeroTagline } from "@/lib/tagline";
 import { themeFromSlug, themeToCssVars, youtubeEmbedId } from "@/lib/theme";
-import { IconBag, IconGallery, IconMapPin, IconPlay } from "./icons";
+import { IconBag, IconMapPin, IconPlay } from "./icons";
 import { PhotoGallery } from "./photo-gallery";
 import { ProductList } from "./product-list";
 import { StickyActions } from "./sticky-actions";
 import { WeatherWidget } from "./weather-widget";
 import { AcquisitionBanner } from "./acquisition-banner";
+import { WhatsAppCta } from "./whatsapp-cta";
 import styles from "./site.module.css";
 
 interface PageProps {
@@ -40,82 +41,65 @@ export default async function TenantSitePage({ params }: PageProps) {
   const hasProducts = tenant.products.length > 0;
   const heroTagline = resolveHeroTagline(tenant.tagline, tenant.description);
   const aboutText = introBody(tenant.description, heroTagline);
-  const hasStickyActions = Boolean(tenant.address?.trim() || tenant.whatsappNumber?.trim());
-  const showHeroBand = Boolean(heroTagline);
+  const hasWhatsApp = Boolean(tenant.whatsappNumber?.trim());
+  const hasStickyActions = Boolean(tenant.address?.trim() || hasWhatsApp);
 
   return (
     <main
       className={`${styles.page}${hasStickyActions ? ` ${styles.pageWithSticky}` : ""}`}
       style={cssVars}
     >
-      <div className={styles.siteHeader}>
-        <div className={styles.headerBrand}>
-          {tenant.logoUrl ? (
-            <>
-              <img
-                src={tenant.logoUrl}
-                alt={tenant.businessName}
-                className={styles.headerLogo}
-              />
-              <h1 className={styles.srOnly}>{tenant.businessName}</h1>
-            </>
-          ) : (
-            <h1 className={styles.headerTitle}>{tenant.businessName}</h1>
-          )}
+      <header className={styles.brandHeader}>
+        <div className={styles.brandWeather}>
+          <WeatherWidget address={tenant.address} />
         </div>
-        <WeatherWidget address={tenant.address} />
-      </div>
 
-      {showHeroBand && (
-        <header className={styles.hero}>
-          <div className={styles.heroBg} aria-hidden />
-          <p className={styles.tagline}>{heroTagline}</p>
-        </header>
-      )}
-
-      {!showHeroBand && !tenant.logoUrl && (
-        <h1 className={styles.srOnly}>{tenant.businessName}</h1>
-      )}
+        <div className={styles.brandCenter}>
+          {tenant.logoUrl ? (
+            <img
+              src={tenant.logoUrl}
+              alt=""
+              className={styles.brandLogo}
+            />
+          ) : null}
+          <h1 className={styles.brandName}>{tenant.businessName}</h1>
+          {heroTagline && <p className={styles.brandTagline}>{heroTagline}</p>}
+        </div>
+      </header>
 
       <div className={styles.content}>
+        {hasGallery && (
+          <section className={styles.mediaSection} aria-label="Fotos">
+            <PhotoGallery photos={tenant.photos} businessName={tenant.businessName} />
+          </section>
+        )}
+
         {aboutText && (
           <section className={styles.introCard} aria-label="Sobre">
             <p className={styles.introText}>{aboutText}</p>
           </section>
         )}
 
-        {hasGallery && (
-          <section className={styles.section} aria-labelledby="gallery-heading">
-            <div className={styles.sectionHead}>
-              <span className={styles.sectionIcon}>
-                <IconGallery />
-              </span>
-              <h2 id="gallery-heading">Galeria</h2>
-            </div>
-            <PhotoGallery photos={tenant.photos} businessName={tenant.businessName} />
-          </section>
-        )}
-
         {hasProducts && (
           <section className={styles.section} aria-labelledby="products-heading">
-            <div className={styles.sectionHead}>
-              <span className={styles.sectionIcon}>
-                <IconBag />
+            <h2 id="products-heading" className={styles.sectionTitle}>
+              <span className={styles.sectionIconWrap}>
+                <IconBag size={18} />
               </span>
-              <h2 id="products-heading">Produtos e ofertas</h2>
-            </div>
+              Produtos e ofertas
+            </h2>
             <ProductList products={tenant.products} />
           </section>
         )}
 
         {tenant.youtubeUrl && (
           <section className={styles.section} aria-labelledby="video-heading">
-            <div className={styles.sectionHead}>
-              <span className={styles.sectionIcon}>
-                <IconPlay />
+            <h2 id="video-heading" className={styles.sectionTitle}>
+              <span className={styles.sectionIconWrap}>
+                <IconPlay size={18} />
               </span>
-              <h2 id="video-heading">Vídeo</h2>
-            </div>
+              Vídeo
+            </h2>
             {videoId ? (
               <div className={styles.videoWrap}>
                 <iframe
@@ -144,6 +128,13 @@ export default async function TenantSitePage({ params }: PageProps) {
           <section className={styles.emptyState}>
             <p>Em breve mais conteúdo sobre {tenant.businessName}.</p>
           </section>
+        )}
+
+        {hasWhatsApp && (
+          <WhatsAppCta
+            businessName={tenant.businessName}
+            whatsappNumber={tenant.whatsappNumber}
+          />
         )}
       </div>
 
