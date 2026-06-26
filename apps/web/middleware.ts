@@ -3,6 +3,10 @@ import type { NextRequest } from "next/server";
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "iaesmartguide.com.br";
 
+function hasOpsSessionCookie(cookie: string | undefined): boolean {
+  return Boolean(cookie && /^[a-f0-9]{64}$/i.test(cookie));
+}
+
 function normalizeHost(host: string): string {
   return host.split(":")[0].toLowerCase();
 }
@@ -36,6 +40,16 @@ function extractSubdomain(hostname: string): string | null {
 export function middleware(req: NextRequest) {
   const url = req.nextUrl;
   const hostname = normalizeHost(req.headers.get("host") ?? "");
+
+  if (url.pathname.startsWith("/ops") && !url.pathname.startsWith("/ops/login")) {
+    if (!hasOpsSessionCookie(req.cookies.get("ops_session")?.value)) {
+      return NextResponse.redirect(new URL("/ops/login", req.url));
+    }
+  }
+
+  if (url.pathname === "/ops/login" && hasOpsSessionCookie(req.cookies.get("ops_session")?.value)) {
+    return NextResponse.redirect(new URL("/ops", req.url));
+  }
 
   if (url.pathname.startsWith("/_next") || url.pathname.startsWith("/api")) {
     return NextResponse.next();

@@ -10,6 +10,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 import { config, assertProductionSecrets } from "./config.js";
 import { adminRouter } from "./routes/admin.js";
+import { opsRouter } from "./routes/ops.js";
 import { asaasRouter } from "./routes/asaas.js";
 import { revalidateRouter } from "./routes/revalidate.js";
 import { tenantsRouter } from "./routes/tenants.js";
@@ -27,6 +28,7 @@ app.get("/health", (_req, res) => {
 app.use("/webhooks/whatsapp", whatsappRouter);
 app.use("/webhooks/asaas", asaasRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/ops", opsRouter);
 app.use("/api/tenants", tenantsRouter);
 app.use("/api/revalidate", revalidateRouter);
 

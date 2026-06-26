@@ -1,0 +1,117 @@
+import { Router, type NextFunction, type Request, type Response } from "express";
+import { timingSafeEqual } from "node:crypto";
+import { prisma } from "@iaesmartguide/db";
+import { config } from "../config.js";
+import { chatStateLabel, tenantOpsStatus } from "../lib/ops-status.js";
+import { isPlaceholderSlug } from "../utils/phone.js";
+
+export const opsRouter = Router();
+
+function safeEqual(a: string, b: string): boolean {
+  try {
+    const ba = Buffer.from(a);
+    const bb = Buffer.from(b);
+    if (ba.length !== bb.length) return false;
+    return timingSafeEqual(ba, bb);
+  } catch {
+    return false;
+  }
+}
+
+function requireOpsAuth(req: Request, res: Response, next: NextFunction): void {
+  const password = config.opsPassword;
+  if (!password) {
+    res.status(503).json({ error: "OPS_PASSWORD não configurado" });
+    return;
+  }
+
+  const header = req.headers.authorization;
+  const token =
+    (typeof header === "string" && header.startsWith("Bearer ")
+      ? header.slice(7)
+      : undefined) ?? (req.headers["x-ops-password"] as string | undefined);
+
+  if (!token || !safeEqual(token, password)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  next();
+}
+
+opsRouter.use(requireOpsAuth);
+
+opsRouter.get("/summary", async (_req, res) => {
+  try {
+    const tenants = await prisma.tenant.findMany({
+      select: { plan: true, isPublished: true, slug: true },
+    });
+
+    const total = tenants.length;
+    const free = tenants.filter((t) => t.plan === "free").length;
+    const premium = tenants.filter((t) => t.plan === "premium").length;
+    const published = tenants.filter((t) => t.isPublished).length;
+    const onboarding = tenants.filter(
+      (t) => !t.isPublished && !isPlaceholderSlug(t.slug)
+    ).length;
+    const registeredOnly = tenants.filter((t) => isPlaceholderSlug(t.slug)).length;
+
+    res.json({ total, free, premium, published, onboarding, registeredOnly });
+  } catch (error) {
+    console.error("[ops/summary]", error);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+opsRouter.get("/tenants", async (_req, res) => {
+  try {
+    const domain = config.rootDomain;
+    const tenants = await prisma.tenant.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        _count: { select: { products: true, photos: true } },
+      },
+    });
+
+    const phones = tenants.map((t) => t.whatsappNumber);
+    const chatStates = await prisma.chatState.findMany({
+      where: { whatsappNumber: { in: phones } },
+    });
+    const chatByPhone = new Map(chatStates.map((c) => [c.whatsappNumber, c]));
+
+    res.json({
+      tenants: tenants.map((t) => {
+        const chat = chatByPhone.get(t.whatsappNumber);
+        const status = tenantOpsStatus(t, chat);
+        const siteUrl = isPlaceholderSlug(t.slug)
+          ? null
+          : `https://${t.slug}.${domain}`;
+
+        return {
+          id: t.id,
+          businessName: t.businessName,
+          ownerName: t.ownerName,
+          slug: t.slug,
+          whatsappNumber: t.whatsappNumber,
+          plan: t.plan,
+          isPublished: t.isPublished,
+          paymentStatus: t.paymentStatus,
+          status: status.key,
+          statusLabel: status.label,
+          chatState: chat?.currentState ?? null,
+          chatStateLabel: chatStateLabel(chat?.currentState),
+          productCount: t._count.products,
+          photoCount: t._count.photos,
+          createdAt: t.createdAt.toISOString(),
+          updatedAt: t.updatedAt.toISOString(),
+          siteUrl,
+          previewUrl: isPlaceholderSlug(t.slug) ? null : `https://${domain}?site=${t.slug}`,
+          whatsappUrl: `https://wa.me/${t.whatsappNumber.replace(/\D/g, "")}`,
+        };
+      }),
+    });
+  } catch (error) {
+    console.error("[ops/tenants]", error);
+    res.status(500).json({ error: "Internal error" });
+  }
+});

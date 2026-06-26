@@ -54,6 +54,7 @@ export const config = {
     liaWhatsappNumber: optional("LIA_WHATSAPP_NUMBER", "5519936196154"),
     premiumGraceDays: Number(optional("PREMIUM_GRACE_DAYS", "15")),
   },
+  opsPassword: optional("OPS_PASSWORD"),
 };
 
 export function assertProductionSecrets(): void {

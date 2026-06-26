@@ -315,6 +315,7 @@ Itens discutidos mas **não implementados** — candidatos ao playbook v2:
 - [ ] Assunto livre (texto) no marketing
 - [ ] Editar oferta (hoje só add/delete)
 - [ ] Painel web OTP (Fase 6)
+- [x] Painel ops IAE (§14) — lista de clientes
 - [x] Planos Free / Premium + limites (§13) — Asaas checkout link manual
 - [ ] PWA nos mini-sites
 - [ ] Lembretes proativos (ex.: sexta-feira)
@@ -400,6 +401,44 @@ A Lia informa sempre quantos ajustes restam.
 | Publicar alterações | 2 créditos | 1×/mês | Ilimitado |
 | Ofertas (máx.) | 4 | 4 | Ilimitado |
 | `divulgar` | Não | Não | Sim |
+
+---
+
+## 14. Painel Ops (IAE — operacional)
+
+Painel **só para o operador** (não é dashboard do cliente). Implementado em `apps/web/app/ops` + `apps/api/src/routes/ops.ts`.
+
+### URL
+
+- Produção: `https://iaesmartguide.com.br/ops`
+- Login: `https://iaesmartguide.com.br/ops/login`
+
+### Autenticação
+
+- Variável `OPS_PASSWORD` na **Vercel (web)** e **Railway (API)** — mesma senha nos dois
+- Cookie httpOnly após login
+
+### O que mostra
+
+| Bloco | Conteúdo |
+|-------|----------|
+| Resumo | Total, no ar, em cadastro, free, premium |
+| Lista | Nome, slug, plano, status, estado da Lia, data, links Site + WhatsApp |
+
+### Status do cliente
+
+| Status | Significado |
+|--------|-------------|
+| No ar | `is_published = true` |
+| Em cadastro | Site em montagem (slug real, não publicado) |
+| Só WhatsApp | Slug `pending-*` (ainda não começou cadastro) |
+| Aguardando pagamento | Estado `WAITING_PAYMENT` |
+
+### Fora do escopo (v2)
+
+- Vitrine de clientes na home
+- Toggle Premium no painel
+- Gráficos e CRM
 
 ---
 
