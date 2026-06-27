@@ -5,26 +5,31 @@ export interface OpsSummary {
   published: number;
   onboarding: number;
   registeredOnly: number;
+  whatsappContacts: number;
+  contactsWithoutTenant: number;
 }
 
-export interface OpsTenant {
-  id: number;
-  businessName: string;
-  ownerName: string;
-  slug: string;
+export interface OpsContact {
+  id: number | null;
+  displayName: string;
   whatsappNumber: string;
-  plan: string;
+  whatsappDisplay: string;
+  slug: string | null;
+  plan: string | null;
   isPublished: boolean;
-  paymentStatus: string;
-  status: "live" | "onboarding" | "registered" | "blocked";
+  hasTenant: boolean;
+  status: "live" | "onboarding" | "registered" | "blocked" | "contact";
   statusLabel: string;
   chatState: string | null;
   chatStateLabel: string;
   productCount: number;
   photoCount: number;
-  createdAt: string;
-  updatedAt: string;
+  lastActivityAt: string;
+  createdAt: string | null;
   siteUrl: string | null;
   previewUrl: string | null;
   whatsappUrl: string;
 }
+
+/** @deprecated Use OpsContact */
+export type OpsTenant = OpsContact;

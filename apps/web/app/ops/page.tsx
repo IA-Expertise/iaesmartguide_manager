@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifyOpsCookie } from "@/lib/ops-auth";
-import { fetchOpsSummary, fetchOpsTenants } from "@/lib/ops-api";
-import type { OpsSummary, OpsTenant } from "@/lib/ops-types";
+import { fetchOpsContacts, fetchOpsSummary } from "@/lib/ops-api";
+import type { OpsContact, OpsSummary } from "@/lib/ops-types";
 import { OpsTenantsTable } from "./ops-tenants-table";
 import styles from "./ops.module.css";
 
@@ -14,6 +14,17 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
+const emptySummary: OpsSummary = {
+  total: 0,
+  free: 0,
+  premium: 0,
+  published: 0,
+  onboarding: 0,
+  registeredOnly: 0,
+  whatsappContacts: 0,
+  contactsWithoutTenant: 0,
+};
+
 export default async function OpsPage() {
   const cookieStore = await cookies();
   if (!verifyOpsCookie(cookieStore.get("ops_session")?.value)) {
@@ -21,17 +32,17 @@ export default async function OpsPage() {
   }
 
   let summary: OpsSummary;
-  let tenants: OpsTenant[];
+  let contacts: OpsContact[];
   let loadError: string | null = null;
 
   try {
-    const data = await Promise.all([fetchOpsSummary(), fetchOpsTenants()]);
+    const data = await Promise.all([fetchOpsSummary(), fetchOpsContacts()]);
     summary = data[0];
-    tenants = data[1].tenants;
+    contacts = data[1].contacts;
   } catch (error) {
     loadError = error instanceof Error ? error.message : "Erro ao carregar dados";
-    summary = { total: 0, free: 0, premium: 0, published: 0, onboarding: 0, registeredOnly: 0 };
-    tenants = [];
+    summary = emptySummary;
+    contacts = [];
   }
 
   return (
@@ -39,7 +50,7 @@ export default async function OpsPage() {
       <header className={styles.header}>
         <div>
           <h1>IAE Ops</h1>
-          <p className={styles.subtitle}>Acompanhamento de clientes e convites</p>
+          <p className={styles.subtitle}>Contatos WhatsApp e clientes cadastrados</p>
         </div>
         <form action="/api/ops/logout" method="POST">
           <button type="submit" className={styles.logoutBtn}>
@@ -52,8 +63,16 @@ export default async function OpsPage() {
 
       <section className={styles.stats} aria-label="Resumo">
         <div className={styles.statCard}>
+          <span className={styles.statValue}>{summary.whatsappContacts}</span>
+          <span className={styles.statLabel}>Falaram com Lia</span>
+        </div>
+        <div className={styles.statCard}>
+          <span className={styles.statValue}>{summary.contactsWithoutTenant}</span>
+          <span className={styles.statLabel}>Sem cadastro</span>
+        </div>
+        <div className={styles.statCard}>
           <span className={styles.statValue}>{summary.total}</span>
-          <span className={styles.statLabel}>Total</span>
+          <span className={styles.statLabel}>Clientes</span>
         </div>
         <div className={styles.statCard}>
           <span className={styles.statValue}>{summary.published}</span>
@@ -73,8 +92,8 @@ export default async function OpsPage() {
         </div>
       </section>
 
-      <section className={styles.tableWrap} aria-label="Clientes">
-        <OpsTenantsTable tenants={tenants} />
+      <section className={styles.tableWrap} aria-label="Contatos WhatsApp">
+        <OpsTenantsTable contacts={contacts} />
       </section>
     </main>
   );

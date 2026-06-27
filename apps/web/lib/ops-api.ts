@@ -1,4 +1,4 @@
-import type { OpsSummary, OpsTenant } from "./ops-types";
+import type { OpsContact, OpsSummary } from "./ops-types";
 
 function getApiUrl(): string {
   return (
@@ -30,6 +30,9 @@ export async function fetchOpsSummary(): Promise<OpsSummary> {
   return opsFetch<OpsSummary>("/summary");
 }
 
-export async function fetchOpsTenants(): Promise<{ tenants: OpsTenant[] }> {
-  return opsFetch<{ tenants: OpsTenant[] }>("/tenants");
+export async function fetchOpsContacts(): Promise<{ contacts: OpsContact[] }> {
+  return opsFetch<{ contacts: OpsContact[] }>("/tenants");
 }
+
+/** @deprecated Use fetchOpsContacts */
+export const fetchOpsTenants = fetchOpsContacts;

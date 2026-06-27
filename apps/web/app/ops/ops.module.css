@@ -145,6 +145,22 @@
   background: #fee2e2;
 }
 
+.badgeContact {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
+.whatsappLink {
+  font-weight: 600;
+  color: #2d6a4f;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.whatsappLink:hover {
+  text-decoration: underline;
+}
+
 .planFree,
 .planPremium {
   display: inline-block;
@@ -303,8 +319,8 @@
 }
 
 @media (max-width: 640px) {
-  .table th:nth-child(4),
-  .table td:nth-child(4) {
+  .table th:nth-child(5),
+  .table td:nth-child(5) {
     display: none;
   }
 }

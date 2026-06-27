@@ -2,7 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from "express"
 import { timingSafeEqual } from "node:crypto";
 import { prisma } from "@iaesmartguide/db";
 import { config } from "../config.js";
-import { chatStateLabel, tenantOpsStatus } from "../lib/ops-status.js";
+import { buildOpsContacts } from "../lib/ops-contacts.js";
 import { isPlaceholderSlug } from "../utils/phone.js";
 
 export const opsRouter = Router();
@@ -56,7 +56,29 @@ opsRouter.get("/summary", async (_req, res) => {
     ).length;
     const registeredOnly = tenants.filter((t) => isPlaceholderSlug(t.slug)).length;
 
-    res.json({ total, free, premium, published, onboarding, registeredOnly });
+    const whatsappContacts = await prisma.chatState.count();
+    const tenantPhones = new Set(
+      (await prisma.tenant.findMany({ select: { whatsappNumber: true } })).map(
+        (t) => t.whatsappNumber
+      )
+    );
+    const allChatPhones = await prisma.chatState.findMany({
+      select: { whatsappNumber: true },
+    });
+    const contactsWithoutTenant = allChatPhones.filter(
+      (c) => !tenantPhones.has(c.whatsappNumber)
+    ).length;
+
+    res.json({
+      total,
+      free,
+      premium,
+      published,
+      onboarding,
+      registeredOnly,
+      whatsappContacts,
+      contactsWithoutTenant,
+    });
   } catch (error) {
     console.error("[ops/summary]", error);
     res.status(500).json({ error: "Internal error" });
@@ -66,50 +88,17 @@ opsRouter.get("/summary", async (_req, res) => {
 opsRouter.get("/tenants", async (_req, res) => {
   try {
     const domain = config.rootDomain;
-    const tenants = await prisma.tenant.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        _count: { select: { products: true, photos: true } },
-      },
-    });
-
-    const phones = tenants.map((t) => t.whatsappNumber);
-    const chatStates = await prisma.chatState.findMany({
-      where: { whatsappNumber: { in: phones } },
-    });
-    const chatByPhone = new Map(chatStates.map((c) => [c.whatsappNumber, c]));
-
-    res.json({
-      tenants: tenants.map((t) => {
-        const chat = chatByPhone.get(t.whatsappNumber);
-        const status = tenantOpsStatus(t, chat);
-        const siteUrl = isPlaceholderSlug(t.slug)
-          ? null
-          : `https://${t.slug}.${domain}`;
-
-        return {
-          id: t.id,
-          businessName: t.businessName,
-          ownerName: t.ownerName,
-          slug: t.slug,
-          whatsappNumber: t.whatsappNumber,
-          plan: t.plan,
-          isPublished: t.isPublished,
-          paymentStatus: t.paymentStatus,
-          status: status.key,
-          statusLabel: status.label,
-          chatState: chat?.currentState ?? null,
-          chatStateLabel: chatStateLabel(chat?.currentState),
-          productCount: t._count.products,
-          photoCount: t._count.photos,
-          createdAt: t.createdAt.toISOString(),
-          updatedAt: t.updatedAt.toISOString(),
-          siteUrl,
-          previewUrl: isPlaceholderSlug(t.slug) ? null : `https://${domain}?site=${t.slug}`,
-          whatsappUrl: `https://wa.me/${t.whatsappNumber.replace(/\D/g, "")}`,
-        };
+    const [chatStates, tenants] = await Promise.all([
+      prisma.chatState.findMany({ orderBy: { updatedAt: "desc" } }),
+      prisma.tenant.findMany({
+        orderBy: { createdAt: "desc" },
+        include: { _count: { select: { products: true, photos: true } } },
       }),
-    });
+    ]);
+
+    const contacts = buildOpsContacts(chatStates, tenants, domain);
+
+    res.json({ contacts, tenants: contacts });
   } catch (error) {
     console.error("[ops/tenants]", error);
     res.status(500).json({ error: "Internal error" });

@@ -422,8 +422,10 @@ Painel **só para o operador** (não é dashboard do cliente). Implementado em `
 
 | Bloco | Conteúdo |
 |-------|----------|
-| Resumo | Total, no ar, em cadastro, free, premium |
-| Lista | Nome, slug, plano, status, estado da Lia, data, links Site + WhatsApp + **Remover** |
+| Resumo | **Falaram com Lia** (`chat_states`), **Sem cadastro** (conversaram mas sem tenant), clientes, no ar, em cadastro, free, premium |
+| Lista | **Nome**, **WhatsApp** (formatado + link), plano, status, estado da Lia, última interação, links Site + Abrir + **Remover** (só com tenant) |
+
+Contatos vêm de `chat_states` unificados com `tenants`. Nome: `businessName` do tenant, ou `tempData.businessName` da conversa, ou "Contato sem nome".
 
 ### Status do cliente
 
@@ -433,6 +435,7 @@ Painel **só para o operador** (não é dashboard do cliente). Implementado em `
 | Em cadastro | Site em montagem (slug real, não publicado) |
 | Só WhatsApp | Slug `pending-*` (ainda não começou cadastro) |
 | Aguardando pagamento | Estado `WAITING_PAYMENT` |
+| Só conversou | Tem `chat_state`, sem tenant |
 
 ### Fora do escopo (v2)
 

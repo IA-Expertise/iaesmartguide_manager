@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import type { OpsTenant } from "@/lib/ops-types";
+import type { OpsContact } from "@/lib/ops-types";
 import styles from "./ops.module.css";
 
 function formatDate(iso: string): string {
@@ -20,25 +20,28 @@ function statusClass(status: string): string {
       return styles.badgeOnboarding;
     case "blocked":
       return styles.badgeBlocked;
+    case "contact":
+      return styles.badgeContact;
     default:
       return styles.badgeRegistered;
   }
 }
 
 function DeleteTenantButton({
-  tenant,
+  contact,
   onDeleted,
 }: {
-  tenant: OpsTenant;
+  contact: OpsContact;
   onDeleted: () => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function handleDelete() {
-    const label = tenant.businessName === "Pendente" ? tenant.slug : tenant.businessName;
+    if (contact.id == null) return;
+
     const ok = window.confirm(
-      `Remover "${label}" do sistema?\n\nO site e o histórico da Lia serão apagados. Essa ação não pode ser desfeita.`
+      `Remover "${contact.displayName}" do sistema?\n\nO site e o histórico da Lia serão apagados. Essa ação não pode ser desfeita.`
     );
     if (!ok) return;
 
@@ -46,7 +49,7 @@ function DeleteTenantButton({
     setError("");
 
     try {
-      const res = await fetch(`/api/ops/tenants/${tenant.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/ops/tenants/${contact.id}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error ?? "Não foi possível remover");
@@ -59,6 +62,8 @@ function DeleteTenantButton({
       setLoading(false);
     }
   }
+
+  if (contact.id == null) return null;
 
   return (
     <span className={styles.deleteWrap}>
@@ -76,64 +81,78 @@ function DeleteTenantButton({
   );
 }
 
-export function OpsTenantsTable({ tenants }: { tenants: OpsTenant[] }) {
+export function OpsTenantsTable({ contacts }: { contacts: OpsContact[] }) {
   const router = useRouter();
 
-  if (tenants.length === 0) {
-    return <p className={styles.empty}>Nenhum cliente ainda. Envie os convites pela Lia.</p>;
+  if (contacts.length === 0) {
+    return <p className={styles.empty}>Nenhum contato ainda. Envie os convites pela Lia.</p>;
   }
 
   return (
     <table className={styles.table}>
       <thead>
         <tr>
-          <th>Negócio</th>
+          <th>Nome</th>
+          <th>WhatsApp</th>
           <th>Plano</th>
           <th>Status</th>
           <th>Lia</th>
-          <th>Entrou em</th>
+          <th>Última interação</th>
           <th>Ações</th>
         </tr>
       </thead>
       <tbody>
-        {tenants.map((t) => (
-          <tr key={t.id}>
+        {contacts.map((c) => (
+          <tr key={c.whatsappNumber}>
             <td>
-              <strong>{t.businessName}</strong>
-              {!t.businessName || t.businessName === "Pendente" ? (
-                <span className={styles.muted}> ({t.ownerName})</span>
+              <strong>{c.displayName}</strong>
+              {c.slug ? <div className={styles.muted}>{c.slug}</div> : null}
+              {c.hasTenant ? (
+                <div className={styles.muted}>
+                  {c.productCount} oferta(s) · {c.photoCount} foto(s)
+                </div>
               ) : null}
-              <div className={styles.muted}>{t.slug}</div>
-              <div className={styles.muted}>
-                {t.productCount} oferta(s) · {t.photoCount} foto(s)
-              </div>
             </td>
             <td>
-              <span className={t.plan === "premium" ? styles.planPremium : styles.planFree}>
-                {t.plan}
-              </span>
+              <a
+                href={c.whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.whatsappLink}
+              >
+                {c.whatsappDisplay}
+              </a>
             </td>
             <td>
-              <span className={`${styles.badge} ${statusClass(t.status)}`}>
-                {t.statusLabel}
+              {c.plan ? (
+                <span className={c.plan === "premium" ? styles.planPremium : styles.planFree}>
+                  {c.plan}
+                </span>
+              ) : (
+                <span className={styles.muted}>—</span>
+              )}
+            </td>
+            <td>
+              <span className={`${styles.badge} ${statusClass(c.status)}`}>
+                {c.statusLabel}
               </span>
             </td>
-            <td className={styles.chatState}>{t.chatStateLabel}</td>
-            <td className={styles.dateCell}>{formatDate(t.createdAt)}</td>
+            <td className={styles.chatState}>{c.chatStateLabel}</td>
+            <td className={styles.dateCell}>{formatDate(c.lastActivityAt)}</td>
             <td className={styles.actions}>
-              {t.siteUrl ? (
-                <a href={t.siteUrl} target="_blank" rel="noopener noreferrer">
+              {c.siteUrl ? (
+                <a href={c.siteUrl} target="_blank" rel="noopener noreferrer">
                   Site
                 </a>
-              ) : t.previewUrl ? (
-                <a href={t.previewUrl} target="_blank" rel="noopener noreferrer">
+              ) : c.previewUrl ? (
+                <a href={c.previewUrl} target="_blank" rel="noopener noreferrer">
                   Preview
                 </a>
               ) : null}
-              <a href={t.whatsappUrl} target="_blank" rel="noopener noreferrer">
-                WhatsApp
+              <a href={c.whatsappUrl} target="_blank" rel="noopener noreferrer">
+                Abrir
               </a>
-              <DeleteTenantButton tenant={t} onDeleted={() => router.refresh()} />
+              <DeleteTenantButton contact={c} onDeleted={() => router.refresh()} />
             </td>
           </tr>
         ))}
