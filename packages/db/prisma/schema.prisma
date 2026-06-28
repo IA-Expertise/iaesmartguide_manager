@@ -25,6 +25,7 @@ model Tenant {
   maintenanceCreditsUsed   Int       @default(0) @map("maintenance_credits_used")
   maintenanceCreditsPeriod String?   @map("maintenance_credits_period") @db.VarChar(7)
   premiumOverdueSince      DateTime? @map("premium_overdue_since")
+  premiumTrialUntil        DateTime? @map("premium_trial_until")
   paymentStatus            String    @default("active") @map("payment_status") @db.VarChar(20)
   createdAt                DateTime  @default(now()) @map("created_at")
   updatedAt                DateTime  @updatedAt @map("updated_at")

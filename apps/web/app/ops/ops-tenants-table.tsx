@@ -12,6 +12,12 @@ function formatDate(iso: string): string {
   }).format(new Date(iso));
 }
 
+function planClass(plan: string): string {
+  if (plan === "premium") return styles.planPremium;
+  if (plan === "trial") return styles.planTrial;
+  return styles.planFree;
+}
+
 function statusClass(status: string): string {
   switch (status) {
     case "live":
@@ -125,9 +131,7 @@ export function OpsTenantsTable({ contacts }: { contacts: OpsContact[] }) {
             </td>
             <td>
               {c.plan ? (
-                <span className={c.plan === "premium" ? styles.planPremium : styles.planFree}>
-                  {c.plan}
-                </span>
+                <span className={planClass(c.plan)}>{c.plan}</span>
               ) : (
                 <span className={styles.muted}>—</span>
               )}

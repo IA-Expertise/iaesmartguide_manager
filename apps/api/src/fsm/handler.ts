@@ -14,7 +14,7 @@ import { appendPhotoToChatState, MAX_GALLERY_PHOTOS } from "../lib/chat-photos.j
 import { slugify } from "../utils/slugify.js";
 import { config } from "../config.js";
 import { editMenuMessage, handleEditingMessage, isEditingState } from "./editing.js";
-import { isPremium, onboardingWelcomeMessages } from "../services/plan.js";
+import { isPremium, isOnPremiumTrial, onboardingWelcomeMessages, trialWelcomeMessages, computePremiumTrialUntil } from "../services/plan.js";
 import type { IncomingMessage } from "./types.js";
 
 export type { IncomingMessage } from "./types.js";
@@ -242,6 +242,7 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<W
           youtubeUrl: tempData.youtubeUrl ?? undefined,
           plan: "free",
           paymentStatus: "active",
+          premiumTrialUntil: computePremiumTrialUntil(),
           isPublished: true,
         },
         update: {
@@ -268,7 +269,11 @@ export async function handleWhatsAppMessage(message: IncomingMessage): Promise<W
       });
 
       replies.push(textMessage(`Seu site está pronto! Acesse: https://${slug}.${domain}`));
-      if (isPremium(saved)) {
+      if (isOnPremiumTrial(saved)) {
+        for (const msg of trialWelcomeMessages()) {
+          replies.push(textMessage(msg));
+        }
+      } else if (isPremium(saved)) {
         replies.push(
           textMessage(
             "Dica da Lia: envie *divulgar* que eu monto textos pra Status, Instagram e grupos com IA ✨"

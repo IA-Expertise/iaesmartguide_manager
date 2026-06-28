@@ -1,5 +1,6 @@
 import type { ChatState, Tenant } from "@prisma/client";
 import { chatStateLabel, tenantOpsStatus } from "./ops-status.js";
+import { getPlanDisplay } from "../services/plan.js";
 import { isPlaceholderSlug } from "../utils/phone.js";
 
 type TenantWithCounts = Tenant & {
@@ -121,7 +122,7 @@ function toRow(
     whatsappNumber: phone,
     whatsappDisplay: formatWhatsappDisplay(phone),
     slug,
-    plan: tenant?.plan ?? null,
+    plan: tenant ? getPlanDisplay(tenant) : null,
     isPublished: tenant?.isPublished ?? false,
     hasTenant: Boolean(tenant),
     status: status.key,

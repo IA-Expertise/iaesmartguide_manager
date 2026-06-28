@@ -2,6 +2,7 @@ export interface OpsSummary {
   total: number;
   free: number;
   premium: number;
+  trial: number;
   published: number;
   onboarding: number;
   registeredOnly: number;
@@ -15,7 +16,7 @@ export interface OpsContact {
   whatsappNumber: string;
   whatsappDisplay: string;
   slug: string | null;
-  plan: string | null;
+  plan: "free" | "premium" | "trial" | null;
   isPublished: boolean;
   hasTenant: boolean;
   status: "live" | "onboarding" | "registered" | "blocked" | "contact";

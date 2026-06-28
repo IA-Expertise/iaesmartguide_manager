@@ -13,12 +13,49 @@ export type TenantPlan = Pick<
   | "maintenanceCreditsUsed"
   | "maintenanceCreditsPeriod"
   | "premiumOverdueSince"
+  | "premiumTrialUntil"
 >;
 
 export type TenantWithId = TenantPlan & Pick<Tenant, "id">;
 
-export function isPremium(tenant: { plan: string }): boolean {
+export function getPremiumTrialDays(): number {
+  return config.plans.premiumTrialDays;
+}
+
+export function computePremiumTrialUntil(from = new Date()): Date | null {
+  const days = getPremiumTrialDays();
+  if (days <= 0) return null;
+  return new Date(from.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+export function isPaidPremium(tenant: { plan: string }): boolean {
   return tenant.plan === "premium";
+}
+
+export function isOnPremiumTrial(tenant: {
+  plan: string;
+  premiumTrialUntil: Date | null;
+}): boolean {
+  if (isPaidPremium(tenant)) return false;
+  if (!tenant.premiumTrialUntil) return false;
+  return tenant.premiumTrialUntil > new Date();
+}
+
+export function isPremium(tenant: {
+  plan: string;
+  premiumTrialUntil?: Date | null;
+}): boolean {
+  if (isPaidPremium(tenant)) return true;
+  return isOnPremiumTrial(tenant as { plan: string; premiumTrialUntil: Date | null });
+}
+
+export function getPlanDisplay(tenant: {
+  plan: string;
+  premiumTrialUntil: Date | null;
+}): "trial" | "premium" | "free" {
+  if (isPaidPremium(tenant)) return "premium";
+  if (isOnPremiumTrial(tenant)) return "trial";
+  return "free";
 }
 
 export function currentCreditsPeriod(): string {
@@ -63,7 +100,7 @@ export async function applyPremiumDowngradeIfNeeded(
   prisma: PrismaClient,
   tenant: TenantWithId
 ): Promise<void> {
-  if (!isPremium(tenant) || !tenant.premiumOverdueSince) return;
+  if (!isPaidPremium(tenant) || !tenant.premiumOverdueSince) return;
 
   const graceMs = PREMIUM_GRACE_DAYS * 24 * 60 * 60 * 1000;
   const elapsed = Date.now() - tenant.premiumOverdueSince.getTime();
@@ -129,6 +166,15 @@ export function premiumPitchMessage(context: "maintenance" | "marketing" | "prod
   return `${intro}\n\n${benefits}\n${cta}`;
 }
 
+export function trialExpiredMessage(): string {
+  const price = config.plans.premiumPriceLabel;
+  const upgrade = config.plans.upgradeUrl;
+  const cta = upgrade
+    ? `Assine o Premium (${price}/mês): ${upgrade}`
+    : `Fale com a Lia para assinar o Premium (${price}/mês).`;
+  return `Seu *trial Premium* de ${getPremiumTrialDays()} dias encerrou. No plano grátis: até ${FREE_MAX_PRODUCTS} ofertas, 1 atualização/mês e sem divulgar com IA.\n\n${cta}`;
+}
+
 export function maintenanceStatusUserMessage(tenant: TenantPlan): string {
   const status = getMaintenanceStatus(tenant);
   if (status.phase === "premium") return "";
@@ -151,8 +197,24 @@ export function maintenanceStatusUserMessage(tenant: TenantPlan): string {
 }
 
 export function maintenanceHintForMenu(tenant: TenantPlan): string {
+  if (isOnPremiumTrial(tenant)) {
+    const daysLeft = Math.max(
+      1,
+      Math.ceil((tenant.premiumTrialUntil!.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+    );
+    return `Trial Premium · *${daysLeft}* dia(s) restante(s) ✨`;
+  }
+
   const status = getMaintenanceStatus(tenant);
   if (status.phase === "premium") return "Plano Premium ✨";
+
+  if (
+    tenant.premiumTrialUntil &&
+    tenant.premiumTrialUntil <= new Date() &&
+    !isPaidPremium(tenant)
+  ) {
+    return "Trial encerrado · plano grátis";
+  }
 
   if (status.phase === "onboarding") {
     return `Plano grátis · *${status.remaining}* ajuste(s) grátis restante(s)`;
@@ -166,10 +228,48 @@ export function maintenanceHintForMenu(tenant: TenantPlan): string {
 }
 
 export function onboardingWelcomeMessages(): string[] {
+  const days = getPremiumTrialDays();
+  if (days > 0) {
+    return trialWelcomeMessages();
+  }
+
   return [
     "No plano *grátis* você tem *2 ajustes grátis* para deixar o site do seu jeito. Depois: *1 atualização por mês*.",
     `*Premium ${config.plans.premiumPriceLabel}/mês:* sem propaganda no site, edições ilimitadas e *divulgar* com IA para redes.`,
   ];
+}
+
+export function trialWelcomeMessages(): string[] {
+  const days = getPremiumTrialDays();
+  const price = config.plans.premiumPriceLabel;
+  const upgrade = config.plans.upgradeUrl;
+
+  const messages = [
+    `🎁 Você ganhou *${days} dias de Premium* grátis: divulgar com IA, ofertas ilimitadas e site sem propaganda!`,
+    "Dica da Lia: envie *divulgar* que eu monto textos para Status, Instagram e grupos ✨",
+  ];
+
+  if (upgrade) {
+    messages.push(`Depois do trial, assine por ${price}/mês: ${upgrade}`);
+  } else {
+    messages.push(`Depois do trial, o Premium (${price}/mês) libera tudo de novo.`);
+  }
+
+  return messages;
+}
+
+export function planUpsellMessage(
+  tenant: Pick<Tenant, "plan" | "premiumTrialUntil">,
+  context: "maintenance" | "marketing" | "products"
+): string {
+  if (
+    tenant.premiumTrialUntil &&
+    tenant.premiumTrialUntil <= new Date() &&
+    !isPaidPremium(tenant)
+  ) {
+    return trialExpiredMessage();
+  }
+  return premiumPitchMessage(context);
 }
 
 export async function upgradeTenantToPremium(
@@ -182,6 +282,7 @@ export async function upgradeTenantToPremium(
       plan: "premium",
       paymentStatus: "paid",
       premiumOverdueSince: null,
+      premiumTrialUntil: null,
     },
   });
 }
@@ -191,7 +292,7 @@ export async function markPremiumOverdue(
   tenantId: number
 ): Promise<void> {
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
-  if (!tenant || !isPremium(tenant)) return;
+  if (!tenant || !isPaidPremium(tenant)) return;
 
   if (tenant.premiumOverdueSince) return;
 

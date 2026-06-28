@@ -181,6 +181,11 @@
   background: #f3e8ff;
 }
 
+.planTrial {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
 .chatState {
   max-width: 9rem;
   font-size: 0.8rem;

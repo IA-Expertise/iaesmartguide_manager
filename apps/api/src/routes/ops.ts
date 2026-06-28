@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { prisma } from "@iaesmartguide/db";
 import { config } from "../config.js";
 import { buildOpsContacts } from "../lib/ops-contacts.js";
+import { isOnPremiumTrial, isPaidPremium, isPremium } from "../services/plan.js";
 import { isPlaceholderSlug } from "../utils/phone.js";
 
 export const opsRouter = Router();
@@ -44,12 +45,13 @@ opsRouter.use(requireOpsAuth);
 opsRouter.get("/summary", async (_req, res) => {
   try {
     const tenants = await prisma.tenant.findMany({
-      select: { plan: true, isPublished: true, slug: true },
+      select: { plan: true, isPublished: true, slug: true, premiumTrialUntil: true },
     });
 
     const total = tenants.length;
-    const free = tenants.filter((t) => t.plan === "free").length;
-    const premium = tenants.filter((t) => t.plan === "premium").length;
+    const trial = tenants.filter((t) => isOnPremiumTrial(t)).length;
+    const premium = tenants.filter((t) => isPaidPremium(t)).length;
+    const free = tenants.filter((t) => !isPremium(t)).length;
     const published = tenants.filter((t) => t.isPublished).length;
     const onboarding = tenants.filter(
       (t) => !t.isPublished && !isPlaceholderSlug(t.slug)
@@ -73,6 +75,7 @@ opsRouter.get("/summary", async (_req, res) => {
       total,
       free,
       premium,
+      trial,
       published,
       onboarding,
       registeredOnly,

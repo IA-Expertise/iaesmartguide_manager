@@ -38,7 +38,7 @@ import {
   isPremium,
   maintenanceHintForMenu,
   maintenanceStatusUserMessage,
-  premiumPitchMessage,
+  planUpsellMessage,
 } from "../services/plan.js";
 import type { IncomingMessage } from "./types.js";
 
@@ -83,6 +83,7 @@ export function editMenuMessage(
     maintenanceCreditsUsed: number;
     maintenanceCreditsPeriod: string | null;
     premiumOverdueSince: Date | null;
+    premiumTrialUntil: Date | null;
   }
 ): WhatsAppOutbound {
   const domain = config.rootDomain;
@@ -167,7 +168,7 @@ async function generateAndDeliverMarketing(
       data: { currentState: ChatStates.CONFIRMED, tempData: {} },
     });
     return [
-      textMessage(premiumPitchMessage("marketing")),
+      textMessage(planUpsellMessage(tenant, "marketing")),
       editMenuMessage(slug, tenant),
     ];
   }
@@ -219,7 +220,7 @@ async function runMarketingAction(
 
   if (!isPremium(fresh)) {
     return [
-      textMessage(premiumPitchMessage("marketing")),
+      textMessage(planUpsellMessage(tenant, "marketing")),
       editMenuMessage(slug, fresh),
     ];
   }
@@ -273,7 +274,7 @@ async function finishEdit(
   if (!canPublishMaintenance(tenant)) {
     return [
       textMessage(
-        `${premiumPitchMessage("maintenance")}\n\nNenhuma alteração foi publicada.`
+        `${planUpsellMessage(tenant, "maintenance")}\n\nNenhuma alteração foi publicada.`
       ),
       editMenuMessage(slug, tenant),
     ];
@@ -416,7 +417,7 @@ async function handleMenuAction(
       if (!withProducts) return [textMessage("Site não encontrado.")];
       if (!canAddProduct(withProducts, withProducts.products.length)) {
         return [
-          textMessage(premiumPitchMessage("products")),
+          textMessage(planUpsellMessage(withProducts, "products")),
           editMenuMessage(slug, withProducts),
         ];
       }
@@ -511,7 +512,7 @@ export async function handleEditingMessage(
     if (isDivulgarTrigger(message)) {
       if (!isPremium(activeTenant)) {
         return [
-          textMessage(premiumPitchMessage("marketing")),
+          textMessage(planUpsellMessage(tenant, "marketing")),
           editMenuMessage(slug, activeTenant),
         ];
       }

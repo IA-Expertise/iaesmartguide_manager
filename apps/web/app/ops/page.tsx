@@ -18,6 +18,7 @@ const emptySummary: OpsSummary = {
   total: 0,
   free: 0,
   premium: 0,
+  trial: 0,
   published: 0,
   onboarding: 0,
   registeredOnly: 0,
@@ -83,12 +84,16 @@ export default async function OpsPage() {
           <span className={styles.statLabel}>Em cadastro</span>
         </div>
         <div className={styles.statCard}>
-          <span className={styles.statValue}>{summary.free}</span>
-          <span className={styles.statLabel}>Free</span>
+          <span className={styles.statValue}>{summary.trial}</span>
+          <span className={styles.statLabel}>Em trial</span>
         </div>
         <div className={styles.statCard}>
           <span className={styles.statValue}>{summary.premium}</span>
-          <span className={styles.statLabel}>Premium</span>
+          <span className={styles.statLabel}>Premium pago</span>
+        </div>
+        <div className={styles.statCard}>
+          <span className={styles.statValue}>{summary.free}</span>
+          <span className={styles.statLabel}>Free</span>
         </div>
       </section>
 

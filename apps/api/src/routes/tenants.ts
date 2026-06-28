@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "@iaesmartguide/db";
+import { isPremium } from "../services/plan.js";
 
 export const tenantsRouter = Router();
 
@@ -30,7 +31,7 @@ tenantsRouter.get("/:slug", async (req, res) => {
     tagline: tenant.tagline,
     address: tenant.address,
     isPublished: tenant.isPublished,
-    plan: tenant.plan,
+    plan: isPremium(tenant) ? "premium" : "free",
     photos: tenant.photos.map((p) => p.photoUrl),
     products: tenant.products.map((p) => ({
       id: p.id,

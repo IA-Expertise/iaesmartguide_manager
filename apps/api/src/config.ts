@@ -53,6 +53,8 @@ export const config = {
     upgradeUrl: optional("PREMIUM_UPGRADE_URL"),
     liaWhatsappNumber: optional("LIA_WHATSAPP_NUMBER", "5519936196154"),
     premiumGraceDays: Number(optional("PREMIUM_GRACE_DAYS", "15")),
+    /** Dias de Premium grátis ao publicar o 1º site. 0 = desliga trial. */
+    premiumTrialDays: Number(optional("PREMIUM_TRIAL_DAYS", "7")),
   },
   opsPassword: optional("OPS_PASSWORD"),
 };

@@ -358,7 +358,7 @@ Modelo freemium acordado — **implementado no código** (`apps/api/src/services
 | Marketing (`divulgar`) | Bloqueado + pitch Premium |
 | Propaganda | Bloco discreto no rodapé do site |
 | Ofertas | Máximo **4** |
-| Trial Premium | **Não** |
+| Trial Premium | **7 dias** ao publicar o 1º site (`PREMIUM_TRIAL_DAYS`) |
 
 **Edição — duas fases**
 
@@ -384,11 +384,13 @@ A Lia informa sempre quantos ajustes restam.
 - `onboardingAdjustmentsUsed`
 - `maintenanceCreditsUsed` + `maintenanceCreditsPeriod`
 - `premiumOverdueSince` (grace 15 dias)
+- `premiumTrialUntil` (fim do trial grátis)
 
 ### Variáveis de ambiente
 
 - `PREMIUM_UPGRADE_URL` — link Asaas checkout
 - `PREMIUM_PRICE_LABEL` — ex.: `R$ 49,90`
+- `PREMIUM_TRIAL_DAYS` — dias de Premium grátis no 1º site (padrão `7`; `0` desliga)
 - `LIA_WHATSAPP_NUMBER` — CTA no banner do site
 - `NEXT_PUBLIC_LIA_WHATSAPP` — mesmo número no web
 
