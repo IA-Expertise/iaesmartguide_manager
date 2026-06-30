@@ -367,7 +367,7 @@ Modelo freemium acordado — **implementado no código** (`apps/api/src/services
 
 A Lia informa sempre quantos ajustes restam.
 
-### PREMIUM — R$ 49,90/mês
+### PREMIUM — R$ 99,00/mês
 
 | Regra | Detalhe |
 |--------|---------|
@@ -389,7 +389,7 @@ A Lia informa sempre quantos ajustes restam.
 ### Variáveis de ambiente
 
 - `PREMIUM_UPGRADE_URL` — link Asaas checkout
-- `PREMIUM_PRICE_LABEL` — ex.: `R$ 49,90`
+- `PREMIUM_PRICE_LABEL` — ex.: `R$ 99,00`
 - `PREMIUM_TRIAL_DAYS` — dias de Premium grátis no 1º site (padrão `7`; `0` desliga)
 - `LIA_WHATSAPP_NUMBER` — CTA no banner do site
 - `NEXT_PUBLIC_LIA_WHATSAPP` — mesmo número no web

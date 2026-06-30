@@ -49,7 +49,7 @@ export const config = {
   geminiApiKey: optional("GEMINI_API_KEY"),
   seedSecret: optional("SEED_SECRET"),
   plans: {
-    premiumPriceLabel: optional("PREMIUM_PRICE_LABEL", "R$ 49,90"),
+    premiumPriceLabel: optional("PREMIUM_PRICE_LABEL", "R$ 99,00"),
     upgradeUrl: optional("PREMIUM_UPGRADE_URL"),
     liaWhatsappNumber: optional("LIA_WHATSAPP_NUMBER", "5519936196154"),
     premiumGraceDays: Number(optional("PREMIUM_GRACE_DAYS", "15")),
