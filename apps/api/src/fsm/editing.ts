@@ -30,7 +30,7 @@ import {
   resolveMarketingTopic,
   type MarketingKind,
 } from "../services/lia-marketing.js";
-import { prepareMarketingPostImageUrl } from "../services/marketing-image.js";
+import { prepareMarketingPostImageUrl, prepareMarketingStatusImageUrl } from "../services/marketing-image.js";
 import {
   applyPremiumDowngradeIfNeeded,
   canAddProduct,
@@ -122,7 +122,7 @@ export function editMenuMessage(
           {
             id: "open_divulgar",
             title: "Divulgar com Lia",
-            description: "Post com foto, textos e gancho",
+            description: "Post, Status, textos e gancho",
           },
         ],
       },
@@ -214,6 +214,19 @@ async function generateAndDeliverMarketing(
       });
     }
 
+    if (kind === "status" && focus.imageUrl) {
+      const { url: composedUrl, composed } = await prepareMarketingStatusImageUrl(
+        tenant.slug,
+        focus.imageUrl,
+        tenant.logoUrl,
+        tenant.businessName
+      );
+      focus = { ...focus, imageUrl: composedUrl };
+      return buildMarketingReplies(kind, tenant, config.rootDomain, copy, focus, {
+        statusComposed: composed,
+      });
+    }
+
     return buildMarketingReplies(kind, tenant, config.rootDomain, copy, focus);
   } catch (error) {
     console.error("[Lia marketing]", error);
@@ -252,12 +265,14 @@ async function runMarketingAction(
     return [geminiUnavailableMessage(), editMenuMessage(slug, fresh)];
   }
 
-  if (kind === "post") {
-    const picker = marketingPhotoPickerMessage(tenant);
+  if (kind === "post" || kind === "status") {
+    const picker = marketingPhotoPickerMessage(tenant, 0, kind);
     if (!picker) {
       return [
         textMessage(
-          "Para montar o *post com foto*, cadastre imagens no menu:\n*Imagens → Fotos*"
+          kind === "status"
+            ? "Para montar o *Status com foto*, cadastre imagens no menu:\n*Imagens → Fotos*"
+            : "Para montar o *post com foto*, cadastre imagens no menu:\n*Imagens → Fotos*"
         ),
       ];
     }
@@ -832,7 +847,11 @@ export async function handleEditingMessage(
           where: { whatsappNumber: phone },
           data: { tempData: { ...tempData, marketingImagePage: nextPage } },
         });
-        const picker = marketingPhotoPickerMessage(tenant, nextPage);
+        const picker = marketingPhotoPickerMessage(
+          tenant,
+          nextPage,
+          tempData.marketingKind ?? "post"
+        );
         return picker ? [picker] : [textMessage("Não há mais imagens.")];
       }
 
@@ -842,14 +861,19 @@ export async function handleEditingMessage(
           where: { whatsappNumber: phone },
           data: { tempData: { ...tempData, marketingImagePage: prevPage } },
         });
-        const picker = marketingPhotoPickerMessage(tenant, prevPage);
+        const picker = marketingPhotoPickerMessage(
+          tenant,
+          prevPage,
+          tempData.marketingKind ?? "post"
+        );
         return picker ? [picker] : [textMessage("Não há imagens anteriores.")];
       }
 
       const image = resolveMarketingImage(message.buttonId, tenant);
       if (!image) return [textMessage("Imagem inválida. Tente de novo.")];
-      return beginMarketingTopicFlow(phone, "post", tenant, {
-        marketingKind: "post",
+      const imageKind = tempData.marketingKind === "status" ? "status" : "post";
+      return beginMarketingTopicFlow(phone, imageKind, tenant, {
+        marketingKind: imageKind,
         marketingImageUrl: image.url,
         marketingImageLabel: image.label,
         marketingImagePage: 0,

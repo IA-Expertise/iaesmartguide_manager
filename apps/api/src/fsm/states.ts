@@ -39,7 +39,7 @@ export interface TempData {
   productImageUrl?: string;
   productIdToDelete?: number;
   suggestedTagline?: string;
-  marketingKind?: "post" | "share" | "tagline";
+  marketingKind?: "post" | "status" | "share" | "tagline";
   marketingImageUrl?: string;
   marketingImageLabel?: string;
   marketingTopicKey?: string;

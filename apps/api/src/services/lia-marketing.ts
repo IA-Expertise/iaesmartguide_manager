@@ -3,7 +3,7 @@ import { runGeminiPrompt, isGeminiConfigured } from "./gemini.js";
 import type { ListRow, WhatsAppOutbound } from "./whatsapp-send.js";
 import { imageMessage, listMessage, textMessage } from "./whatsapp-send.js";
 
-export type MarketingKind = "post" | "share" | "tagline";
+export type MarketingKind = "post" | "status" | "share" | "tagline";
 
 const WHATSAPP_CAPTION_MAX = 1024;
 const WHATSAPP_TEXT_SAFE = 1500;
@@ -29,6 +29,7 @@ export interface MarketingFocus {
   topicLabel: string;
   imageUrl?: string;
   imageLabel?: string;
+  imageFormat?: "post" | "status";
   productTitle?: string;
   productPrice?: string;
 }
@@ -66,8 +67,12 @@ function focusBlock(focus: MarketingFocus): string {
     `Assunto escolhido: *${focus.topicLabel}*. O texto inteiro deve ser sobre isso.`,
   ];
   if (focus.imageLabel) {
+    const formatHint =
+      focus.imageFormat === "status"
+        ? "Imagem vertical para Status/Stories."
+        : "Imagem do post.";
     lines.push(
-      `Imagem do post: ${focus.imageLabel}. Escreva uma legenda que combine com essa foto (sem descrever pixels).`
+      `${formatHint} ${focus.imageLabel}. Escreva uma legenda que combine com essa foto (sem descrever pixels).`
     );
   }
   if (focus.productTitle) {
@@ -112,6 +117,16 @@ Crie a LEGENDA de um post para WhatsApp/Instagram:
 5. Convite para WhatsApp com o link: ${ctx.whatsappUrl || "(não informado)"}
 
 Entre 400 e 900 caracteres. Só a legenda.`;
+    case "status":
+      return `${base}
+
+Crie uma legenda CURTA para Status do WhatsApp ou Stories do Instagram (imagem vertical 9:16):
+1. Uma frase de impacto com emoji (use *negrito*)
+2. Convite direto ligado ao assunto
+3. Link do site: ${ctx.siteUrl}
+4. WhatsApp: ${ctx.whatsappUrl || "(não informado)"}
+
+Entre 120 e 320 caracteres. Tom rápido e visual. Só a legenda.`;
     case "share":
       return `${base}
 
@@ -131,6 +146,8 @@ function geminiOptionsForKind(kind: MarketingKind) {
   switch (kind) {
     case "post":
       return { maxOutputTokens: 2048 };
+    case "status":
+      return { maxOutputTokens: 1024 };
     case "share":
       return { maxOutputTokens: 768 };
     case "tagline":
@@ -194,26 +211,34 @@ const LIST_ROWS_MAX = 10;
 
 function buildMarketingImageRows(tenant: TenantWithMedia): ListRow[] {
   const rows: ListRow[] = [];
+  const productImageUrls = new Set(
+    tenant.products
+      .map((product) => product.imageUrl)
+      .filter((url): url is string => Boolean(url?.startsWith("http")))
+  );
 
   if (tenant.logoUrl?.startsWith("http")) {
     rows.push({ id: "mkt_img_logo", title: "Logo", description: "Marca do negócio" });
   }
-
-  tenant.photos.forEach((photo, index) => {
-    if (!photo.photoUrl.startsWith("http")) return;
-    rows.push({
-      id: `mkt_img_${photo.id}`,
-      title: `Foto ${index + 1}`,
-      description: "Galeria do site",
-    });
-  });
 
   for (const product of tenant.products) {
     if (!product.imageUrl?.startsWith("http")) continue;
     rows.push({
       id: `mkt_img_prod_${product.id}`,
       title: product.title.slice(0, 24),
-      description: (product.price ? `Oferta · ${product.price}` : "Foto da oferta").slice(0, 72),
+      description: (product.price ? product.price : "Oferta").slice(0, 72),
+    });
+  }
+
+  let galleryIndex = 0;
+  for (const photo of tenant.photos) {
+    if (!photo.photoUrl.startsWith("http")) continue;
+    if (productImageUrls.has(photo.photoUrl)) continue;
+    galleryIndex += 1;
+    rows.push({
+      id: `mkt_img_${photo.id}`,
+      title: `Foto ${galleryIndex}`,
+      description: "Galeria do site",
     });
   }
 
@@ -253,20 +278,35 @@ function paginateImageRows(rows: ListRow[], page: number): {
 
 export function marketingPhotoPickerMessage(
   tenant: TenantWithMedia,
-  page = 0
+  page = 0,
+  kind: MarketingKind = "post"
 ): WhatsAppOutbound | null {
   const allRows = buildMarketingImageRows(tenant);
   if (!allRows.length) return null;
 
   const { pageRows, total } = paginateImageRows(allRows, page);
-  const galleryCount = tenant.photos.filter((p) => p.photoUrl.startsWith("http")).length;
+  const productImageUrls = new Set(
+    tenant.products
+      .map((product) => product.imageUrl)
+      .filter((url): url is string => Boolean(url?.startsWith("http")))
+  );
+  const galleryCount = tenant.photos.filter(
+    (photo) => photo.photoUrl.startsWith("http") && !productImageUrls.has(photo.photoUrl)
+  ).length;
   const offerCount = tenant.products.filter((p) => p.imageUrl?.startsWith("http")).length;
   const hasLogo = tenant.logoUrl?.startsWith("http") ? 1 : 0;
 
-  const logoHint = hasLogo ? "\n🏷️ Com logo cadastrado, aplicamos sua marca na foto do post." : "";
+  const logoHint =
+    kind === "status"
+      ? hasLogo
+        ? "\n📱 Vertical (Status/Stories) · logo + nome na arte"
+        : "\n📱 Vertical (Status/Stories) · nome do negócio na arte"
+      : hasLogo
+        ? "\n🏷️ Com logo cadastrado, aplicamos sua marca na foto do post."
+        : "";
   const body =
     total <= LIST_ROWS_MAX
-      ? `Qual imagem usar? 📷\n${galleryCount} foto(s) da galeria · ${offerCount} oferta(s) com foto${hasLogo ? " · logo" : ""}${logoHint}`
+      ? `Qual imagem usar? 📷\n${offerCount} oferta(s) · ${galleryCount} foto(s) da galeria${hasLogo ? " · logo" : ""}${logoHint}`
       : `Qual imagem usar? 📷 (${page + 1}/${Math.ceil(total / (LIST_ROWS_MAX - 1))}) — ${total} opções no total${logoHint}`;
 
   const galleryRows = pageRows.filter(
@@ -278,8 +318,8 @@ export function marketingPhotoPickerMessage(
   );
 
   const sections: Array<{ title: string; rows: ListRow[] }> = [];
-  if (galleryRows.length) sections.push({ title: "Galeria", rows: galleryRows });
   if (offerRows.length) sections.push({ title: "Ofertas", rows: offerRows });
+  if (galleryRows.length) sections.push({ title: "Galeria", rows: galleryRows });
   if (navRows.length) sections.push({ title: "Mais", rows: navRows });
   if (!sections.length) sections.push({ title: "Imagens", rows: pageRows });
 
@@ -293,9 +333,11 @@ export function marketingTopicPickerMessage(
   const intro =
     kind === "post"
       ? "Sobre o que é o post? A IA monta o texto em cima disso ✨"
-      : kind === "share"
-        ? "Sobre o que divulgar? Escolha o assunto:"
-        : "Qual ângulo pro gancho do site?";
+      : kind === "status"
+        ? "Sobre o que é o Status? A IA monta a legenda curta ✨"
+        : kind === "share"
+          ? "Sobre o que divulgar? Escolha o assunto:"
+          : "Qual ângulo pro gancho do site?";
 
   return listMessage(intro, "Ver assuntos", [
     { title: "Assunto", rows: listMarketingTopics(products) },
@@ -327,8 +369,18 @@ export function resolveMarketingImage(
   const photo = tenant.photos.find((item) => item.id === Number.parseInt(match[1], 10));
   if (!photo?.photoUrl.startsWith("http")) return null;
 
-  const index = tenant.photos.findIndex((item) => item.id === photo.id) + 1;
-  return { url: photo.photoUrl, label: `Foto ${index}` };
+  const linkedProduct = tenant.products.find((item) => item.imageUrl === photo.photoUrl);
+  if (linkedProduct) {
+    return { url: photo.photoUrl, label: linkedProduct.title };
+  }
+
+  const galleryOnlyIndex =
+    tenant.photos.filter((item) => {
+      if (!item.photoUrl.startsWith("http")) return false;
+      return !tenant.products.some((product) => product.imageUrl === item.photoUrl);
+    }).findIndex((item) => item.id === photo.id) + 1;
+
+  return { url: photo.photoUrl, label: `Foto ${galleryOnlyIndex}` };
 }
 
 export function resolveMarketingTopic(
@@ -405,7 +457,12 @@ export function marketingMenuMessage(): WhatsAppOutbound {
           {
             id: "lia_post",
             title: "Post com foto",
-            description: "Escolhe foto + assunto + legenda",
+            description: "Quadrado · foto + legenda",
+          },
+          {
+            id: "lia_status",
+            title: "Status com foto",
+            description: "Vertical 9:16 · Status/Stories",
           },
           {
             id: "lia_share",
@@ -473,10 +530,10 @@ export function isMarketingGenerateAction(actionId: string | undefined): boolean
 export function marketingKindFromAction(actionId: string): MarketingKind | null {
   const map: Record<string, MarketingKind> = {
     lia_post: "post",
+    lia_status: "status",
     lia_share: "share",
     lia_tagline: "tagline",
     lia_kit: "share",
-    lia_status: "share",
     lia_instagram: "post",
     lia_grupo: "share",
     lia_bio: "share",
@@ -490,7 +547,7 @@ export function buildMarketingReplies(
   rootDomain: string,
   copy: string,
   focus: MarketingFocus,
-  options?: { logoApplied?: boolean }
+  options?: { logoApplied?: boolean; statusComposed?: boolean }
 ): WhatsAppOutbound[] {
   const siteUrl = `https://${tenant.slug}.${rootDomain}`;
   const whatsappUrl = tenant.whatsappNumber?.trim()
@@ -498,17 +555,32 @@ export function buildMarketingReplies(
     : "";
   const copyWithWhatsApp = ensureWhatsAppInCopy(copy, whatsappUrl);
 
-  if (kind === "post") {
+  if (kind === "post" || kind === "status") {
     const imageUrl = focus.imageUrl;
     if (!imageUrl) {
       return [
         textMessage(
-          "Para montar o *post com foto*, cadastre imagens no menu:\n*Imagens → Fotos*"
+          kind === "status"
+            ? "Para montar o *Status com foto*, cadastre imagens no menu:\n*Imagens → Fotos*"
+            : "Para montar o *post com foto*, cadastre imagens no menu:\n*Imagens → Fotos*"
         ),
       ];
     }
 
     const caption = captionForWhatsApp(copyWithWhatsApp);
+    if (kind === "status") {
+      const artLine = options?.statusComposed
+        ? "\n📱 Arte vertical pronta (9:16) · logo e nome aplicados quando disponíveis."
+        : "";
+      return [
+        textMessage(
+          `✨ *Status pronto!* (${focus.imageLabel ?? "foto"} · ${focus.topicLabel})${artLine}\nPublique no *Status* ou *Stories*. Encaminhe a imagem abaixo.\n\n📎 ${siteUrl}${whatsappUrl ? `\n📲 ${whatsappUrl}` : ""}`
+        ),
+        imageMessage(imageUrl, caption),
+        textMessage("Gostou? Envie *divulgar* para gerar outro."),
+      ];
+    }
+
     const logoLine = options?.logoApplied ? "\n🏷️ Logo aplicado na foto." : "";
     return [
       textMessage(
@@ -532,6 +604,7 @@ export function buildMarketingReplies(
 }
 
 export function focusFromTempData(tempData: {
+  marketingKind?: MarketingKind;
   marketingTopicKey?: string;
   marketingTopicLabel?: string;
   marketingImageUrl?: string;
@@ -545,6 +618,12 @@ export function focusFromTempData(tempData: {
     topicLabel: tempData.marketingTopicLabel,
     imageUrl: tempData.marketingImageUrl,
     imageLabel: tempData.marketingImageLabel,
+    imageFormat:
+      tempData.marketingKind === "status"
+        ? "status"
+        : tempData.marketingKind === "post"
+          ? "post"
+          : undefined,
     productTitle: tempData.marketingProductTitle,
     productPrice: tempData.marketingProductPrice,
   };
