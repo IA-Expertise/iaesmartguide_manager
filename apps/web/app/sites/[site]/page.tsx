@@ -88,7 +88,10 @@ export default async function TenantSitePage({ params }: PageProps) {
               </span>
               Produtos e ofertas
             </h2>
-            <ProductList products={tenant.products} />
+            <ProductList
+              products={tenant.products}
+              whatsappNumber={hasWhatsApp ? tenant.whatsappNumber : null}
+            />
           </section>
         )}
 

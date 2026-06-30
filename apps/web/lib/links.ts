@@ -13,3 +13,8 @@ export function wazeNavigateUrl(address: string): string {
 export function whatsAppContactUrl(phone: string, message: string): string {
   return `https://wa.me/${digitsOnlyPhone(phone)}?text=${encodeURIComponent(message)}`;
 }
+
+export function productWhatsAppMessage(offerTitle: string): string {
+  const title = offerTitle.trim().slice(0, 120);
+  return `Eu vi no seu site e quero saber mais sobre ${title}`;
+}
