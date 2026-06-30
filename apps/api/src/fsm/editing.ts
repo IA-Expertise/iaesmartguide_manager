@@ -30,6 +30,7 @@ import {
   resolveMarketingTopic,
   type MarketingKind,
 } from "../services/lia-marketing.js";
+import { prepareMarketingPostImageUrl } from "../services/marketing-image.js";
 import {
   applyPremiumDowngradeIfNeeded,
   canAddProduct,
@@ -152,7 +153,7 @@ async function generateAndDeliverMarketing(
 ): Promise<WhatsAppOutbound[]> {
   const slug = tenant.slug;
   const kind = tempData.marketingKind;
-  const focus = focusFromTempData(tempData);
+  let focus = focusFromTempData(tempData);
 
   if (!kind || !focus) {
     await prisma.chatState.update({
@@ -199,6 +200,20 @@ async function generateAndDeliverMarketing(
       where: { whatsappNumber: phone },
       data: { currentState: ChatStates.CONFIRMED, tempData: {} },
     });
+
+    if (kind === "post" && focus.imageUrl) {
+      const originalUrl = focus.imageUrl;
+      const composedUrl = await prepareMarketingPostImageUrl(
+        tenant.slug,
+        focus.imageUrl,
+        tenant.logoUrl
+      );
+      focus = { ...focus, imageUrl: composedUrl };
+      return buildMarketingReplies(kind, tenant, config.rootDomain, copy, focus, {
+        logoApplied: composedUrl !== originalUrl,
+      });
+    }
+
     return buildMarketingReplies(kind, tenant, config.rootDomain, copy, focus);
   } catch (error) {
     console.error("[Lia marketing]", error);

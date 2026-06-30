@@ -33,8 +33,16 @@ export interface MarketingFocus {
   productPrice?: string;
 }
 
+export function whatsAppContactUrl(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  return digits ? `https://wa.me/${digits}` : "";
+}
+
 export function buildMarketingContext(tenant: TenantWithMedia, rootDomain: string) {
   const siteUrl = `https://${tenant.slug}.${rootDomain}`;
+  const whatsappUrl = tenant.whatsappNumber?.trim()
+    ? whatsAppContactUrl(tenant.whatsappNumber)
+    : "";
   const latestProducts = tenant.products.slice(0, 5).map((p) => {
     const price = p.price ? ` — ${p.price}` : "";
     return `${p.title}${price}`;
@@ -43,6 +51,7 @@ export function buildMarketingContext(tenant: TenantWithMedia, rootDomain: strin
   return {
     businessName: tenant.businessName,
     siteUrl,
+    whatsappUrl,
     tagline: tenant.tagline ?? "(não definido)",
     description: tenant.description ?? "(não definido)",
     address: tenant.address ?? "(não informado)",
@@ -99,15 +108,17 @@ Crie a LEGENDA de um post para WhatsApp/Instagram:
 1. Título chamativo com emoji (use *negrito*)
 2. Uma ou duas frases ligadas ao assunto escolhido
 3. Se for oferta específica, destaque só ela; senão cite até 3 ofertas do contexto
-4. CTA com link ${ctx.siteUrl}
+4. CTA com link do site: ${ctx.siteUrl}
+5. Convite para WhatsApp com o link: ${ctx.whatsappUrl || "(não informado)"}
 
-Entre 400 e 850 caracteres. Só a legenda.`;
+Entre 400 e 900 caracteres. Só a legenda.`;
     case "share":
       return `${base}
 
 Crie UM texto para Status do WhatsApp ou grupos de turismo.
 Tom de dica entre amigos, focado no assunto escolhido.
-Entre 200 e 450 caracteres. Termine com ${ctx.siteUrl}. Só o texto.`;
+Inclua o site (${ctx.siteUrl}) e o WhatsApp (${ctx.whatsappUrl || "(não informado)"}).
+Entre 200 e 500 caracteres. Só o texto.`;
     case "tagline":
       return `${base}
 
@@ -252,10 +263,11 @@ export function marketingPhotoPickerMessage(
   const offerCount = tenant.products.filter((p) => p.imageUrl?.startsWith("http")).length;
   const hasLogo = tenant.logoUrl?.startsWith("http") ? 1 : 0;
 
+  const logoHint = hasLogo ? "\n🏷️ Com logo cadastrado, aplicamos sua marca na foto do post." : "";
   const body =
     total <= LIST_ROWS_MAX
-      ? `Qual imagem usar? 📷\n${galleryCount} foto(s) da galeria · ${offerCount} oferta(s) com foto${hasLogo ? " · logo" : ""}`
-      : `Qual imagem usar? 📷 (${page + 1}/${Math.ceil(total / (LIST_ROWS_MAX - 1))}) — ${total} opções no total`;
+      ? `Qual imagem usar? 📷\n${galleryCount} foto(s) da galeria · ${offerCount} oferta(s) com foto${hasLogo ? " · logo" : ""}${logoHint}`
+      : `Qual imagem usar? 📷 (${page + 1}/${Math.ceil(total / (LIST_ROWS_MAX - 1))}) — ${total} opções no total${logoHint}`;
 
   const galleryRows = pageRows.filter(
     (row) => row.id === "mkt_img_logo" || /^mkt_img_\d+$/.test(row.id)
@@ -344,6 +356,16 @@ export function resolveMarketingTopic(
     productTitle: product.title,
     productPrice: product.price ?? undefined,
   };
+}
+
+export function ensureWhatsAppInCopy(copy: string, whatsappUrl: string): string {
+  if (!whatsappUrl) return copy;
+  const digits = whatsappUrl.replace(/\D/g, "");
+  if (copy.includes("wa.me") || (digits && copy.includes(digits))) {
+    return copy;
+  }
+  const line = `\n\n📲 *WhatsApp:* ${whatsappUrl}`;
+  return `${copy.trim()}${line}`;
 }
 
 export function captionForWhatsApp(caption: string): string {
@@ -467,9 +489,14 @@ export function buildMarketingReplies(
   tenant: TenantWithMedia,
   rootDomain: string,
   copy: string,
-  focus: MarketingFocus
+  focus: MarketingFocus,
+  options?: { logoApplied?: boolean }
 ): WhatsAppOutbound[] {
   const siteUrl = `https://${tenant.slug}.${rootDomain}`;
+  const whatsappUrl = tenant.whatsappNumber?.trim()
+    ? whatsAppContactUrl(tenant.whatsappNumber)
+    : "";
+  const copyWithWhatsApp = ensureWhatsAppInCopy(copy, whatsappUrl);
 
   if (kind === "post") {
     const imageUrl = focus.imageUrl;
@@ -481,10 +508,11 @@ export function buildMarketingReplies(
       ];
     }
 
-    const caption = captionForWhatsApp(copy);
+    const caption = captionForWhatsApp(copyWithWhatsApp);
+    const logoLine = options?.logoApplied ? "\n🏷️ Logo aplicado na foto." : "";
     return [
       textMessage(
-        `✨ *Post pronto!* (${focus.imageLabel ?? "foto"} · ${focus.topicLabel})\nEncaminhe a imagem abaixo.\n\n📎 ${siteUrl}`
+        `✨ *Post pronto!* (${focus.imageLabel ?? "foto"} · ${focus.topicLabel})${logoLine}\nEncaminhe a imagem abaixo.\n\n📎 ${siteUrl}${whatsappUrl ? `\n📲 ${whatsappUrl}` : ""}`
       ),
       imageMessage(imageUrl, caption),
       textMessage("Gostou? Envie *divulgar* para gerar outro."),
@@ -495,7 +523,7 @@ export function buildMarketingReplies(
     return [textMessage(copy)];
   }
 
-  const chunks = splitWhatsAppMessages(copy);
+  const chunks = splitWhatsAppMessages(ensureWhatsAppInCopy(copy, whatsappUrl));
   return [
     textMessage(`✨ Texto sobre *${focus.topicLabel}* — copie abaixo:`),
     ...chunks.map((chunk) => textMessage(chunk)),
